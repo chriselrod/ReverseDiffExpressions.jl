@@ -1,13 +1,20 @@
 module ReverseDiffExpressions
 
-using PaddedMatrices, StackPointers, DiffRules
+using VectorizationBase, StackPointers, SIMDPirates, DiffRules, LinearAlgebra, PaddedMatrices, StructuredMatrices, ProbabilityDistributions
 
+using PaddedMatrices:
+    AbstractFixedSizeVector,
+    AbstractFixedSizeMatrix,
+    AbstractMutableFixedSizeArray
+
+using StructuredMatrices: AbstractLowerTriangularMatrix
 using ProbabilityDistributions: distribution_diff_rule!
 
 using FunctionWrappers: FunctionWrapper
 using MacroTools: postwalk, prewalk, @capture, @q
 
-import SIMDPirates: vsum, vadd, vifelse
+# import SIMDPirates: vsum, vadd, vifelse
+import ReverseDiffExpressionsBase: ∂mul, ∂getindex
 
 include("adjoints.jl")
 include("misc_functions.jl")

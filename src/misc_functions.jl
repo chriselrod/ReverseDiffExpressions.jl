@@ -221,7 +221,7 @@ function ITPExpectedValue_quote(
 end
 
 @generated function ITPExpectedValue(
-            τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+            τ::PaddedMatrices.AbstractFixedSizeVector{R},
             β::PaddedMatrices.AbstractFixedSizeVector{N,T},
             κ::PaddedMatrices.AbstractFixedSizeVector{N,T}
         ) where {R,N,T}
@@ -236,7 +236,7 @@ end
     end
 end
 @generated function ∂ITPExpectedValue(
-            τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+            τ::PaddedMatrices.AbstractFixedSizeVector{R},
             β::PaddedMatrices.AbstractFixedSizeVector{N,T},
             κ::PaddedMatrices.AbstractFixedSizeVector{N,T},
             ::Val{track}
@@ -260,7 +260,7 @@ end
     q
 end
 @generated function ITPExpectedValue(
-            τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+            τ::PaddedMatrices.AbstractFixedSizeVector{R},
             β::PaddedMatrices.AbstractFixedSizeVector{N,T},
             κ::PaddedMatrices.AbstractFixedSizeVector{N,T},
             θ::PaddedMatrices.AbstractFixedSizeVector{N,T}
@@ -277,7 +277,7 @@ end
     end
 end
 @generated function ∂ITPExpectedValue(
-            τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+            τ::PaddedMatrices.AbstractFixedSizeVector{R},
             β::PaddedMatrices.AbstractFixedSizeVector{N,T},
             κ::PaddedMatrices.AbstractFixedSizeVector{N,T},
             θ::PaddedMatrices.AbstractFixedSizeVector{N,T},
@@ -304,7 +304,7 @@ end
 end
 @generated function ITPExpectedValue(
     sp::StackPointer,
-    τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+    τ::PaddedMatrices.AbstractFixedSizeVector{R},
     β::PaddedMatrices.AbstractFixedSizeVector{N,T},
     κ::PaddedMatrices.AbstractFixedSizeVector{N,T}
 ) where {R,N,T}
@@ -320,7 +320,7 @@ end
 end
 @generated function ∂ITPExpectedValue(
     sp::StackPointer,
-    τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+    τ::PaddedMatrices.AbstractFixedSizeVector{R},
     β::PaddedMatrices.AbstractFixedSizeVector{N,T},
     κ::PaddedMatrices.AbstractFixedSizeVector{N,T},
     ::Val{track}
@@ -345,7 +345,7 @@ end
 end
 @generated function ITPExpectedValue(
     sp::StackPointer,
-    τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+    τ::PaddedMatrices.AbstractFixedSizeVector{R},
     β::PaddedMatrices.AbstractFixedSizeVector{N,T},
     κ::PaddedMatrices.AbstractFixedSizeVector{N,T},
     θ::PaddedMatrices.AbstractFixedSizeVector{N,T}
@@ -363,7 +363,7 @@ end
 end
 @generated function ∂ITPExpectedValue(
     sp::StackPointer,
-    τ::Union{<:PaddedMatrices.AbstractFixedSizeVector{R},<:StructuredMatrices.StaticUnitRange{R}},
+    τ::PaddedMatrices.AbstractFixedSizeVector{R},
     β::PaddedMatrices.AbstractFixedSizeVector{N,T},
     κ::PaddedMatrices.AbstractFixedSizeVector{N,T},
     θ::PaddedMatrices.AbstractFixedSizeVector{N,T},
