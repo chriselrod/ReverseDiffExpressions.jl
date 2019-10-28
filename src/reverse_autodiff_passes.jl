@@ -2,16 +2,18 @@ const NOOPDIFFS = Set{Symbol}( ( :AutoregressiveMatrix, :adjoint ))
 
 function noopdiff!(first_pass, second_pass, tracked_vars, out, f, A, mod)
     track = false
-    seedout = Symbol("###seed###", out)
+    seedout = ajd(out)
     for i ∈ eachindex(A)
         a = A[i]
         a ∈ tracked_vars || continue
         track = true
-        seeda = Symbol("###seed###", a)
-        pushfirst!(second_pass.args, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED( $seedout, $seeda )))
+        seeda = adj(a)
+        # pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(Symbol("##∂target/∂", a, "##")), $∂, $(Symbol("##∂target/∂", out, "##")))))
+        pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!( $seeda, $seedout )))
     end
     track && push!(tracked_vars, out)
     push!(first_pass.args, :($out = $f($(A...))))
+    push!(first_pass.args, :($seedout = uninitialized($out)))
     nothing
 end
 
@@ -42,8 +44,10 @@ function reverse_diff_pass!(first_pass, second_pass, expr, tracked_vars, mod, ve
         if @capture(x, out_ = f_(A__))
             differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, verbose)
         elseif @capture(x, out_ = A_) && isa(A, Symbol)
+            throw("Assignment without op should have been eliminated in earlier pass.")
             push!(first_pass.args, x)
-            pushfirst!(second_pass.args, :( $(Symbol("###seed###", A)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($(Symbol("###seed###", out)), $(Symbol("###seed###", A)) )) )
+            push!(first_pass.args, :($(adj(out)) = $mod.seed(out)))
+            pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(Symbol("###seed###", A)), $(Symbol("###seed###", out)) )) )
             A ∈ tracked_vars && push!(tracked_vars, out)
         # elseif @capture(x, if cond_; conditionaleval_; else; alternateeval_ end)
             # reverse_diff_ifelse!(first_pass, second_pass, tracked_vars, cond, conditionaleval, alternateeval)
@@ -57,31 +61,29 @@ end
 function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diffrules::NTuple{N}, mod) where {N}
     track_out = false
     push!(first_pass.args, :($out = $f($(A...))))
-    seedout = Symbol("###seed###", out)
+    seedout = adj(out)
     for i ∈ eachindex(A)
         a = A[i]
         a ∈ tracked_vars || continue
         track_out = true
-        ∂ = Symbol("###adjoint###_##∂", out, "##∂", a, "##")
+        ∂ = adj(out, a)
         push!(first_pass.args, :($∂ = $(diffrules[i])))
-        pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($seedout, $∂, $(Symbol("###seed###", a)) )) )
+        pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(Symbol("###seed###", a)), $∂, $seedout)))
     end
     track_out && push!(tracked_vars, out)
     nothing
 end
 function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diffrule, mod)
-    length(A) == 1 || throw("length(A) == $(length(A)); must equal 1 when passed diffrules are: $(diffrule)")
+    @assert length(A) == 1 "length(A) == $(length(A)); must equal 1 when passed diffrules are: $(diffrule)"
     track_out = false
     push!(first_pass, :($out = $f($(A...))))
-    seedout = Symbol("###seed###", out)
-    for i ∈ eachindex(A)
-        A[i] ∈ tracked_vars || continue
-        track_out = true
-        ∂ = Symbol("###adjoint###_##∂", out, "##∂", a, "##")
-        push!(first_pass.args, :($∂ = $(diffrule)))
-        pushfirst!(second_pass.args, :( $(Symbol("###seed###", A[i])) = $mod.RESERVED_INCREMENT_SEED_RESERVED($seedout, $∂, $(Symbol("###seed###", A[i])) )) )
-    end
-    track_out && push!(tracked_vars, out)
+    seedout = adj(out)
+    a = A[1]
+    a ∈ tracked_vars || return
+    ∂ = adj(out, a)
+    push!(first_pass.args, :($∂ = $(diffrule)))
+    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $seedout)))
+    push!(tracked_vars, out)
     nothing
 end
 
@@ -138,6 +140,7 @@ function differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, v
 #        zygote_diff_rule!(first_pass, second_pass, tracked_vars, out, A, f)
         # throw("Fall back differention rules not yet implemented, and no method yet to handle $f($(A...))")
     end
+    nothing
 end
 
 

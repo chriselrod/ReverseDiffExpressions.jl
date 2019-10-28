@@ -14,7 +14,7 @@ using FunctionWrappers: FunctionWrapper
 using MacroTools: postwalk, prewalk, @capture, @q
 
 # import SIMDPirates: vsum, vadd, vifelse
-import ReverseDiffExpressionsBase: ∂mul, ∂getindex
+import ReverseDiffExpressionsBase: adj, ∂mul, ∂getindex
 
 include("adjoints.jl")
 include("misc_functions.jl")
