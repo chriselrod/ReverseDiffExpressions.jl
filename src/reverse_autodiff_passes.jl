@@ -2,7 +2,7 @@ const NOOPDIFFS = Set{Symbol}( ( :AutoregressiveMatrix, :adjoint ))
 
 function noopdiff!(first_pass, second_pass, tracked_vars, out, f, A, mod)
     track = false
-    seedout = ajd(out)
+    seedout = adj(out)
     for i ∈ eachindex(A)
         a = A[i]
         a ∈ tracked_vars || continue
@@ -13,7 +13,7 @@ function noopdiff!(first_pass, second_pass, tracked_vars, out, f, A, mod)
     end
     track && push!(tracked_vars, out)
     push!(first_pass.args, :($out = $f($(A...))))
-    push!(first_pass.args, :($seedout = uninitialized($out)))
+    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
     nothing
 end
 
@@ -49,10 +49,6 @@ function reverse_diff_pass!(first_pass, second_pass, expr, tracked_vars, mod, ve
             push!(first_pass.args, :($(adj(out)) = $mod.seed(out)))
             pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(Symbol("###seed###", A)), $(Symbol("###seed###", out)) )) )
             A ∈ tracked_vars && push!(tracked_vars, out)
-        # elseif @capture(x, if cond_; conditionaleval_; else; alternateeval_ end)
-            # reverse_diff_ifelse!(first_pass, second_pass, tracked_vars, cond, conditionaleval, alternateeval)
-        # else
-        #     push!(first_pass.args, x)
         end
         x
     end
@@ -70,7 +66,10 @@ function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diff
         push!(first_pass.args, :($∂ = $(diffrules[i])))
         pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(Symbol("###seed###", a)), $∂, $seedout)))
     end
-    track_out && push!(tracked_vars, out)
+    if track_out
+        push!(tracked_vars, out)
+        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    end
     nothing
 end
 function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diffrule, mod)
@@ -84,6 +83,7 @@ function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diff
     push!(first_pass.args, :($∂ = $(diffrule)))
     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $seedout)))
     push!(tracked_vars, out)
+    push!(first_pass.args, :($seedout = similar($out)))
     nothing
 end
 

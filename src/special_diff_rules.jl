@@ -10,49 +10,61 @@ const SPECIAL_DIFF_RULE = FunctionWrapper{Cvoid,Tuple{Expr,Expr,Set{Symbol},Symb
 const SPECIAL_DIFF_RULES = Dict{Symbol,SPECIAL_DIFF_RULE}()
 
 function exp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
-    a = A[1]
+    a = first(A)
     push!(first_pass.args, :($out = $mod.SLEEFPirates.exp($a)))
     a ∈ tracked_vars || return nothing
     push!(tracked_vars, out)
-    ∂ = Symbol("###adjoint###_##∂", out, "##∂", a, "##")
+    ∂ = adj(out, a)
+    seedout = adj(out)
+    seeda = adj(a)
     push!(first_pass.args, :($∂ = $out))
-    pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($(Symbol("###seed###", out)), $∂, $(Symbol("###seed###", a)) )))
+    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
 SPECIAL_DIFF_RULES[:exp] = SPECIAL_DIFF_RULE(exp_diff_rule!)
 function vexp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
-    a = A[1]
+    a = first(A)
     push!(first_pass.args, :($out = $mod.PaddedMatrices.vexp($a)))
     a ∈ tracked_vars || return nothing
     push!(tracked_vars, out)
-    ∂ = Symbol("###adjoint###_##∂", out, "##∂", a, "##")
+    ∂ = adj(out, a)
+    seedout = adj(out); seeda = adj(a)
     push!(first_pass.args, :($∂ = Diagonal($out)))
-    pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($(Symbol("###seed###", out)), $∂, $(Symbol("###seed###", a)) )))
+    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
 SPECIAL_DIFF_RULES[:vexp] = SPECIAL_DIFF_RULE(vexp_diff_rule!)
 function log_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
-    a = A[1]
+    a = first(A)
     push!(first_pass.args, :($out = $mod.SLEEFPirates.log($a)))
     a ∈ tracked_vars || return nothing
     push!(tracked_vars, out)
-    ∂ = Symbol("###adjoint###_##∂", out, "##∂", a, "##")
+    seedout = adj(out)
+    ∂ = adj(out, a)
+    seeda = adj(a)
     push!(first_pass.args, :($∂ = inv($a)))
-    pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($(Symbol("###seed###", out)), $∂, $(Symbol("###seed###", a)) )))
+    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
 SPECIAL_DIFF_RULES[:log] = SPECIAL_DIFF_RULE(log_diff_rule!)
 function plus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
     push!(first_pass.args, :($out = +($(A...)) ))
     track_out = false
-    adjout = Symbol("###seed###", out)
+    seedout = adj(out)
     for i ∈ eachindex(A)
         a = A[i]
         a ∈ tracked_vars || continue
         track_out = true
-        pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($adjout, $(Symbol("###seed###", a)))))
+        seeda = adj(a)
+        pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $seedout)))
     end
-    track_out && push!(tracked_vars, out)
+    if track_out
+        push!(tracked_vars, out)
+        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    end
     nothing
 end
 SPECIAL_DIFF_RULES[:+] = SPECIAL_DIFF_RULE(plus_diff_rule!)
@@ -60,14 +72,18 @@ SPECIAL_DIFF_RULES[:+] = SPECIAL_DIFF_RULE(plus_diff_rule!)
 function add_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
     push!(first_pass.args, :($out = $mod.SIMDPirates.vadd($(A...))))
     track_out = false
-    adjout = Symbol("###seed###", out)
+    seedout = adj(out)
     for i ∈ eachindex(A)
         a = A[i]
         a ∈ tracked_vars || continue
         track_out = true
-        pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($adjout, $(Symbol("###seed###", a)))))
+        seeda = adj(a)
+        pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $seedout)))
     end
-    track_out && push!(tracked_vars, out)
+    if track_out
+        push!(tracked_vars, out)
+        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    end
     nothing
 end
 SPECIAL_DIFF_RULES[:vadd] = SPECIAL_DIFF_RULE(add_diff_rule!)
@@ -76,28 +92,28 @@ function minus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
     a₁ = A[1]
     a₂ = A[2]
     push!(first_pass.args, :($out = $a₁ - $a₂ ))
-    adjout = Symbol("###seed###", out)
-    a₁ ∈ tracked_vars && pushfirst!(second_pass.args, :( $(Symbol("###seed###", a₁)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($adjout, $(Symbol("###seed###", a₁)))))
-    a₂ ∈ tracked_vars && pushfirst!(second_pass.args, :( $(Symbol("###seed###", a₂)) = $mod.RESERVED_DECREMENT_SEED_RESERVED($adjout, $(Symbol("###seed###", a₂)))))
+    seedout = adj(out)
+    a₁ ∈ tracked_vars && pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₁)), $adjout)))
+    a₂ ∈ tracked_vars && pushfirst!(second_pass.args, :( $mod.RESERVED_DECREMENT_SEED_RESERVED!($(adj(a₂)), $adjout)))
     track_out = (a₁ ∈ tracked_vars) || (a₂ ∈ tracked_vars)
     track_out && push!(tracked_vars, out)
     nothing
 end
 SPECIAL_DIFF_RULES[:-] = SPECIAL_DIFF_RULE(minus_diff_rule!)
-function inv_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
-    a = A[1]
-    if a ∉ tracked_vars
-        push!(first_pass.args, :($out = inv($a)))
-        return nothing
-    end
-    push!(tracked_vars, out)
-    # ∂ = gensym(:∂)
-    ∂ = Symbol("###adjoint###_##∂", out, "##∂", a, "##")
-    push!(first_pass.args, :(($out, $∂) = $mod.StructuredMatrices.∂inv($a)))
-    pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($(Symbol("###seed###", out)), $∂, $(Symbol("###seed###", a)) )))
-    nothing
-end
-SPECIAL_DIFF_RULES[:inv] = SPECIAL_DIFF_RULE(inv_diff_rule!)
+# function inv_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
+#     a = A[1]
+#     if a ∉ tracked_vars
+#         push!(first_pass.args, :($out = inv($a)))
+#         return nothing
+#     end
+#     push!(tracked_vars, out)
+#     # ∂ = gensym(:∂)
+#     ∂ = adj(out, a)
+#     push!(first_pass.args, :(($out, $∂) = $mod.StructuredMatrices.∂inv($a)))
+#     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(adj(out)) )))
+#     nothing
+# end
+# SPECIAL_DIFF_RULES[:inv] = SPECIAL_DIFF_RULE(inv_diff_rule!)
 function inv′_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
     a = A[1]
     if a ∉ tracked_vars
@@ -106,9 +122,9 @@ function inv′_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod)
     end
     push!(tracked_vars, out)
     # ∂ = gensym(:∂)
-    ∂ = Symbol("###adjoint###_##∂", out, "##∂", a, "##")
+    ∂ = adj(out, a)
     push!(first_pass.args, :(($out, $∂) = $mod.StructuredMatrices.∂inv′($a)))
-    pushfirst!(second_pass.args, :( $(Symbol("###seed###", a)) = $mod.RESERVED_INCREMENT_SEED_RESERVED($(Symbol("###seed###", out)), $∂, $(Symbol("###seed###", a)) )))
+    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(out)) ))
     nothing
 end
 SPECIAL_DIFF_RULES[:inv′] = SPECIAL_DIFF_RULE(inv′_diff_rule!)
