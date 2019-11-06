@@ -16,6 +16,18 @@ using MacroTools: postwalk, prewalk, @capture, @q
 # import SIMDPirates: vsum, vadd, vifelse
 import ReverseDiffExpressionsBase: adj, ∂mul, ∂getindex
 
+struct BiMap # Consider tuple case: out = (a1, a2, a3); how to properly record which has been initialized?
+    d::Dict{Symbol,Set{Symbol}}
+end
+function addaliases!(bm::BiMap, s1::Symbol, s2::Symbol)
+    push!(get!(() -> Set{Symbol}(), bm.d, s1), s2)
+    push!(get!(() -> Set{Symbol}(), bm.d, s2), s1)
+    bm
+end
+Base.in(s::Symbol, bm::BiMap) = s ∈ bm.d
+Base.getindex(bm::BiMap, s::Symbol) = bm.d[s]
+    
+
 include("adjoints.jl")
 include("misc_functions.jl")
 include("special_diff_rules.jl")
