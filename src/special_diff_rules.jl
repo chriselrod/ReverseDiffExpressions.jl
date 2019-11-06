@@ -94,7 +94,7 @@ function minus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, al
     push!(first_pass.args, :($out = $a₁ - $a₂ ))
     seedout = adj(out)
     a₁ ∈ tracked_vars && pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₁)), $adjout)))
-    a₂ ∈ tracked_vars && pushfirst!(second_pass.args, :( $mod.RESERVED_DECREMENT_SEED_RESERVED!($(adj(a₂)), $adjout)))
+    a₂ ∈ tracked_vars && pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₂)), SIMDPirates.vsub($adjout))))
     track_out = (a₁ ∈ tracked_vars) || (a₂ ∈ tracked_vars)
     if track_out
         push!(tracked_vars, out)
@@ -227,7 +227,7 @@ function tuple_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, al
             seeda = adj(a)
             # pushfirst!(second_pass.args, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED($seedout[$i], $seeda )))
             seedsa[i] = seeda
-            addaliases!(aliases, a, out)
+            addaliases!(aliases, seeda, seedout)
         else
             seedsa[i] = nothing
         end
@@ -265,7 +265,7 @@ function vec_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        addaliases!(aliases, out, a)
+        addaliases!(aliases, seeda, seedout)
         push!(first_pass.args, :($seedout = vec($seeda)))
     end
     nothing
@@ -281,7 +281,7 @@ function reshape_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, 
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        addaliases!(aliases, out, a)
+        addaliases!(aliases, seeda, seedout)
         # pushfirst!(second_pass.args, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED(reshape($seedout, $mod.maybe_static_size($a)), $seeda) ))
         push!(first_pass.args, :( $seedout = reshape($seeda, $shape)))
     end
@@ -327,7 +327,9 @@ function getindex_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod,
         seedout = adj(out)
         pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
         push!(first_pass.args, :(($out, $∂) = $mod.PaddedMatrices.∂getindex($(A...))))
-        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+        # push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+        push!(first_pass.args, :($seedout = $seeda))
+        addaliases!(aliases, seeda, seedout)
     elseif a isa Expr && a.head == :tuple
         # terrible hack!!!!
         # TODO: DO THIS CORRECTLY

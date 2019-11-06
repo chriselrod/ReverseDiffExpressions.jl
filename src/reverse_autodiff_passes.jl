@@ -40,9 +40,10 @@ end
 # end
 
 function reverse_diff_pass!(first_pass, second_pass, expr, tracked_vars, mod, verbose = false)
+    aliases = BiMap()
     postwalk(expr) do x
         if @capture(x, out_ = f_(A__))
-            differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, verbose)
+            differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, verbose, aliases)
         elseif @capture(x, out_ = A_) && isa(A, Symbol)
             throw("Assignment without op should have been eliminated in earlier pass.")
             push!(first_pass.args, x)
@@ -52,6 +53,7 @@ function reverse_diff_pass!(first_pass, second_pass, expr, tracked_vars, mod, ve
         end
         x
     end
+    aliases
 end
 
 function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diffrules::NTuple{N}, mod) where {N}
