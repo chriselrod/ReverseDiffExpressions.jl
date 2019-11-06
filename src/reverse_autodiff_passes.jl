@@ -43,7 +43,7 @@ function reverse_diff_pass!(first_pass, second_pass, expr, tracked_vars, mod, ve
     aliases = BiMap()
     postwalk(expr) do x
         if @capture(x, out_ = f_(A__))
-            differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, verbose, aliases)
+            differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, aliases, verbose)
         elseif @capture(x, out_ = A_) && isa(A, Symbol)
             throw("Assignment without op should have been eliminated in earlier pass.")
             push!(first_pass.args, x)
@@ -104,7 +104,7 @@ will be added.
 "first_pass" is an expression of the forward pass, while
 "second_pass" is an expression for the reverse pass.
 """
-function differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, verbose = false)
+function differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, aliases, verbose = false)
 #    @show f, typeof(f), A, (A .∈ Ref(tracked_vars))
 #    @show f, out, A, (A .∈ Ref(tracked_vars))
     if !any(a -> a ∈ tracked_vars, A)
@@ -115,13 +115,13 @@ function differentiate!(first_pass, second_pass, tracked_vars, out, f, A, mod, v
     if f ∈ ProbabilityDistributions.DISTRIBUTION_DIFF_RULES
         ProbabilityDistributions.distribution_diff_rule!(mod, first_pass, second_pass, tracked_vars, out, A, f, verbose)
     elseif haskey(SPECIAL_DIFF_RULES, f)
-        SPECIAL_DIFF_RULES[f](first_pass, second_pass, tracked_vars, out, A, mod)
+        SPECIAL_DIFF_RULES[f](first_pass, second_pass, tracked_vars, out, A, mod, aliases)
 #    elseif f isa GlobalRef # TODO: Come up with better system that can use modules.
 #        SPECIAL_DIFF_RULES[f.name](first_pass, second_pass, tracked_vars, out, A)
     elseif @capture(f, M_.F_) # TODO: Come up with better system that can use modules.
         F == :getproperty && return
         if F ∈ keys(SPECIAL_DIFF_RULES)
-            SPECIAL_DIFF_RULES[F](first_pass, second_pass, tracked_vars, out, A, mod)
+            SPECIAL_DIFF_RULES[F](first_pass, second_pass, tracked_vars, out, A, mod, aliases)
         elseif DiffRules.hasdiffrule(M, F, arity)
             apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, DiffRules.diffrule(M, F, A...), mod)
         elseif F ∈ NOOPDIFFS            

@@ -6,7 +6,7 @@
 # DiffRules.diffrule(:Base, :^, :x, :y)
 
 
-const SPECIAL_DIFF_RULE = FunctionWrapper{Cvoid,Tuple{Expr,Expr,Set{Symbol},Symbol,Vector{Symbol},Symbol},BiMap}
+const SPECIAL_DIFF_RULE = FunctionWrapper{Cvoid,Tuple{Expr,Expr,Set{Symbol},Symbol,Vector{Symbol},Symbol,BiMap}}
 const SPECIAL_DIFF_RULES = Dict{Symbol,SPECIAL_DIFF_RULE}()
 
 function exp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)

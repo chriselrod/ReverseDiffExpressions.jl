@@ -3,9 +3,9 @@ module ReverseDiffExpressions
 using VectorizationBase, StackPointers, SIMDPirates, DiffRules, LinearAlgebra, PaddedMatrices, StructuredMatrices, ProbabilityDistributions
 
 using PaddedMatrices:
-    AbstractFixedSizeVector,
-    AbstractFixedSizeMatrix,
-    AbstractMutableFixedSizeArray
+    AbstractFixedSizeVector, AbstractMutableFixedSizeVector, UninitializedVector,
+    AbstractFixedSizeMatrix, AbstractMutableFixedSizeMatrix, UninitializedMatrix,
+    AbstractFixedSizeArray, AbstractMutableFixedSizeArray, UninitializedArray
 
 using StructuredMatrices: AbstractLowerTriangularMatrix
 using ProbabilityDistributions: distribution_diff_rule!
@@ -14,7 +14,7 @@ using FunctionWrappers: FunctionWrapper
 using MacroTools: postwalk, prewalk, @capture, @q
 
 # import SIMDPirates: vsum, vadd, vifelse
-import ReverseDiffExpressionsBase: adj, ∂mul, ∂getindex
+import ReverseDiffExpressionsBase: adj, ∂mul, ∂getindex, RESERVED_INCREMENT_SEED_RESERVED!
 
 # Consider tuple case: out = (a1, a2, a3); how to properly record which has been initialized?
 # Defined as an alias rather than wrapper.

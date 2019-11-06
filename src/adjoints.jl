@@ -29,25 +29,36 @@ Base.size(::AbstractReducer) = ()
         sp + $(VectorizationBase.align(N*sizeof(T))), reduction'
     end
 end
-@generated function PaddedMatrices.RESERVED_INCREMENT_SEED_RESERVED(
-    sp::StackPointer,
-    A::PaddedMatrices.AbstractFixedSizeMatrix{M,N,T,PA},
+@generated function RESERVED_INCREMENT_SEED_RESERVED!(
+    C::AbstractMutableFixedSizeVector{N,T,PC},
     ::Reducer{:row},
-    C′::LinearAlgebra.Adjoint{T,<:PaddedMatrices.AbstractMutableFixedSizeVector{N,T,PC}}
+    A::AbstractFixedSizeMatrix{M,N,T,PA}
 ) where {M,N,T,PA,PC}
     quote
-        #        reduction = PtrVector{N,T,P}(pointer(sp,T))
-        C = C′'
-        D = PtrVector{$N,$T,$PC}(pointer(sp,$T))
-        @inbounds for n ∈ 0:(N-1)
+        @inbounds for n ∈ 0:$(N-1)
             sₙ = zero(T)
             @vvectorize $T for m ∈ 1:$M
                 sₙ += A[m + $PA*n]
             end
-#            reduction[n+1] = sₙ
-            D[n+1] = C[n+1] + sₙ
+            C[n+1] = Base.FastMath.add_fast(C[n+1], sₙ)
         end
-        sp + $(VectorizationBase.align(sizeof(T)*PC)), D'
+        nothing
+    end
+end
+@generated function RESERVED_INCREMENT_SEED_RESERVED!(
+    C::UninitializedVector{N,T,PC},
+    ::Reducer{:row},
+    A::AbstractFixedSizeMatrix{M,N,T,PA}
+) where {M,N,T,PA,PC}
+    quote
+        @inbounds for n ∈ 0:$(N-1)
+            sₙ = zero(T)
+            @vvectorize $T for m ∈ 1:$M
+                sₙ += A[m + $PA*n]
+            end
+            C[n+1] = sₙ
+        end
+        nothing
     end
 end
 @generated function Base.:*(sp::StackPointer, a::LinearAlgebra.Adjoint{T,<:AbstractVector{T}}, ::Reducer{S}) where {T,S}
