@@ -18,7 +18,7 @@ function exp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
     seedout = adj(out)
     seeda = adj(a)
     push!(first_pass.args, :($∂ = $out))
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
@@ -31,7 +31,7 @@ function vexp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, ali
     ∂ = adj(out, a)
     seedout = adj(out); seeda = adj(a)
     push!(first_pass.args, :($∂ = Diagonal($out)))
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
@@ -45,7 +45,7 @@ function log_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
     ∂ = adj(out, a)
     seeda = adj(a)
     push!(first_pass.args, :($∂ = inv($a)))
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
@@ -63,7 +63,7 @@ function plus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, ali
     end
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
@@ -82,7 +82,7 @@ function add_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
     end
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
@@ -98,7 +98,7 @@ function minus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, al
     track_out = (a₁ ∈ tracked_vars) || (a₂ ∈ tracked_vars)
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
@@ -113,7 +113,7 @@ function inv_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
     seedout = adj(out)
     ∂ = adj(out, a)
     push!(first_pass.args, :(($out, $∂) = $mod.StructuredMatrices.∂inv($a)))
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(adj(out)) )))
     nothing
 end
@@ -128,7 +128,7 @@ function inv′_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, a
     seedout = adj(out)
     ∂ = adj(out, a)
     push!(first_pass.args, :(($out, $∂) = $mod.StructuredMatrices.∂inv′($a)))
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(out)) ))
     nothing
 end
@@ -159,7 +159,7 @@ function mul_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
             push!(track_tup.args, false)
         end
     end
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     pushfirst!(second_pass.args, :($(ProbabilityDistributions.return_expression(return_expr)) = $mod.∂mul($a1, $a2, Val{$track_tup}())))
     nothing
 end
@@ -188,7 +188,7 @@ function itp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
     push!(first_pass.args, :( $(ProbabilityDistributions.return_expression(∂tup)) = $mod.∂ITPExpectedValue($(A...), Val{$track_tup}())))
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
@@ -211,7 +211,7 @@ function hierarchical_centering_diff_rule!(first_pass, second_pass, tracked_vars
         end
     end
     push!(first_pass.args, :($func_output = ∂HierarchicalCentering($(A...), Val{$tracked}()) ) )
-    any(tracked) && push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    any(tracked) && push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 SPECIAL_DIFF_RULES[:HierarchicalCentering] = SPECIAL_DIFF_RULE(hierarchical_centering_diff_rule!)
@@ -310,14 +310,16 @@ function cov_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
         end
     end
     push!(first_pass.args, :($func_output = $mod.DistributionParameters.∂CovarianceMatrix($(A...), Val{$tracked}()) ) )
-    any(tracked) && push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    any(tracked) && push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 SPECIAL_DIFF_RULES[:CovarianceMatrix] = SPECIAL_DIFF_RULE(cov_diff_rule!)
 
+# Only views have been implemented so far.
 function getindex_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
-    for i ∈ 2:length(A)
-        @assert A[i] ∉ tracked_vars
+    Ninds = length(A) - 1
+    for i ∈ 1:Ninds
+        @assert A[i+1] ∉ tracked_vars
     end
     a = A[1]
     if a ∈ tracked_vars
@@ -327,8 +329,8 @@ function getindex_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod,
         seedout = adj(out)
         pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
         push!(first_pass.args, :(($out, $∂) = $mod.PaddedMatrices.∂getindex($(A...))))
-        # push!(first_pass.args, :($seedout = alloc_adjoint($out)))
-        push!(first_pass.args, :($seedout = $seeda))
+        # push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+        push!(first_pass.args, :($seedout = $seeda[$([A[i+1] for i ∈ 1:Ninds]...)]))
         addaliases!(aliases, seeda, seedout)
     elseif a isa Expr && a.head == :tuple
         # terrible hack!!!!
@@ -383,7 +385,7 @@ function rank_update_diff_rule!(first_pass, second_pass, tracked_vars, out, A, m
     track_L && push!(q.args, :($mod.RESERVED_INCREMENT_SEED_RESERVED!($seedL, $seedLtemp)))
     track_x && push!(q.args, :($mod.RESERVED_INCREMENT_SEED_RESERVED!($seedx, $seedxtemp)))
     pushfirst!(second_pass.args, q)
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 SPECIAL_DIFF_RULES[:rank_update] = SPECIAL_DIFF_RULE(rank_update_diff_rule!)

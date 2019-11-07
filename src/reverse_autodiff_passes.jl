@@ -13,7 +13,7 @@ function noopdiff!(first_pass, second_pass, tracked_vars, out, f, A, mod)
     end
     track && push!(tracked_vars, out)
     push!(first_pass.args, :($out = $f($(A...))))
-    push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 
@@ -70,7 +70,7 @@ function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diff
     end
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = alloc_adjoint($out)))
+        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
@@ -85,7 +85,7 @@ function apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, diff
     push!(first_pass.args, :($∂ = $(diffrule)))
     pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $seedout)))
     push!(tracked_vars, out)
-    push!(first_pass.args, :($seedout = similar($out)))
+    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 
