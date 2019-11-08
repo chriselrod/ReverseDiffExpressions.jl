@@ -6,53 +6,61 @@
 # DiffRules.diffrule(:Base, :^, :x, :y)
 
 
-const SPECIAL_DIFF_RULE = FunctionWrapper{Cvoid,Tuple{Expr,Expr,Set{Symbol},Symbol,Vector{Symbol},Symbol,BiMap}}
+const SPECIAL_DIFF_RULE = FunctionWrapper{Nothing,Tuple{Vector{Any},Vector{Any},Set{Symbol},InitializedVarTracker,Symbol,Vector{Symbol},Symbol}}
 const SPECIAL_DIFF_RULES = Dict{Symbol,SPECIAL_DIFF_RULE}()
 
-function exp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function exp_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     a = first(A)
-    push!(first_pass.args, :($out = $mod.SLEEFPirates.exp($a)))
+    push!(first_pass, :($out = $mod.SLEEFPirates.exp($a)))
     a ∈ tracked_vars || return nothing
     push!(tracked_vars, out)
     ∂ = adj(out, a)
     seedout = adj(out)
     seeda = adj(a)
-    push!(first_pass.args, :($∂ = $out))
-    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
-    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
+    push!(first_pass, :($∂ = $out))
+    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+    pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
 SPECIAL_DIFF_RULES[:exp] = SPECIAL_DIFF_RULE(exp_diff_rule!)
-function vexp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function vexp_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     a = first(A)
-    push!(first_pass.args, :($out = $mod.PaddedMatrices.vexp($a)))
+    push!(first_pass, :($out = $mod.PaddedMatrices.vexp($a)))
     a ∈ tracked_vars || return nothing
     push!(tracked_vars, out)
     ∂ = adj(out, a)
     seedout = adj(out); seeda = adj(a)
-    push!(first_pass.args, :($∂ = Diagonal($out)))
-    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
-    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
+    push!(first_pass, :($∂ = Diagonal($out)))
+    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+    pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
 SPECIAL_DIFF_RULES[:vexp] = SPECIAL_DIFF_RULE(vexp_diff_rule!)
-function log_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function log_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     a = first(A)
-    push!(first_pass.args, :($out = $mod.SLEEFPirates.log($a)))
+    push!(first_pass, :($out = $mod.SLEEFPirates.log($a)))
     a ∈ tracked_vars || return nothing
     push!(tracked_vars, out)
     seedout = adj(out)
     ∂ = adj(out, a)
     seeda = adj(a)
-    push!(first_pass.args, :($∂ = inv($a)))
-    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
-    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
+    push!(first_pass, :($∂ = inv($a)))
+    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+    pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
 end
 SPECIAL_DIFF_RULES[:log] = SPECIAL_DIFF_RULE(log_diff_rule!)
-function plus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
-    # push!(first_pass.args, :($out = Base.FastMath.add_fast($(A...)) ))
-    push!(first_pass.args, :($out = +($(A...)) ))
+function plus_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
+    # push!(first_pass, :($out = Base.FastMath.add_fast($(A...)) ))
+    push!(first_pass, :($out = +($(A...)) ))
     track_out = false
     seedout = adj(out)
     for i ∈ eachindex(A)
@@ -60,18 +68,20 @@ function plus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, ali
         a ∈ tracked_vars || continue
         track_out = true
         seeda = adj(a)
-        pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $seedout)))
+        pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $seedout)))
     end
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+        push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:+] = SPECIAL_DIFF_RULE(plus_diff_rule!)
 # add is specifically for DistributionsParameters.Target
-function add_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
-    push!(first_pass.args, :($out = $mod.SIMDPirates.vadd($(A...))))
+function add_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
+    push!(first_pass, :($out = $mod.SIMDPirates.vadd($(A...))))
     track_out = false
     seedout = adj(out)
     for i ∈ eachindex(A)
@@ -79,68 +89,76 @@ function add_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
         a ∈ tracked_vars || continue
         track_out = true
         seeda = adj(a)
-        pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $seedout)))
+        pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $seedout)))
     end
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+        push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:vadd] = SPECIAL_DIFF_RULE(add_diff_rule!)
-function minus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function minus_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     @assert length(A) == 2
     a₁ = A[1]
     a₂ = A[2]
-    push!(first_pass.args, :($out = $a₁ - $a₂ ))
+    push!(first_pass, :($out = $a₁ - $a₂ ))
     seedout = adj(out)
-    a₁ ∈ tracked_vars && pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₁)), $adjout)))
-    a₂ ∈ tracked_vars && pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₂)), SIMDPirates.vsub($adjout))))
+    a₁ ∈ tracked_vars && pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₁)), $adjout)))
+    a₂ ∈ tracked_vars && pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₂)), SIMDPirates.vsub($adjout))))
     track_out = (a₁ ∈ tracked_vars) || (a₂ ∈ tracked_vars)
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+        push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:-] = SPECIAL_DIFF_RULE(minus_diff_rule!)
-function inv_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function inv_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     a = A[1]
     if a ∉ tracked_vars
-        push!(first_pass.args, :($out = inv($a)))
+        push!(first_pass, :($out = inv($a)))
         return nothing
     end
     push!(tracked_vars, out)
     seedout = adj(out)
     ∂ = adj(out, a)
-    push!(first_pass.args, :(($out, $∂) = $mod.StructuredMatrices.∂inv($a)))
-    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
-    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(adj(out)) )))
+    push!(first_pass, :(($out, $∂) = $mod.StructuredMatrices.∂inv($a)))
+    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+    pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(adj(out)) )))
     nothing
 end
 SPECIAL_DIFF_RULES[:inv] = SPECIAL_DIFF_RULE(inv_diff_rule!)
-function inv′_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function inv′_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     a = A[1]
     if a ∉ tracked_vars
-        push!(first_pass.args, :($out = $mod.StructuredMatrices.inv′($a)))
+        push!(first_pass, :($out = $mod.StructuredMatrices.inv′($a)))
         return nothing
     end
     push!(tracked_vars, out)
     seedout = adj(out)
     ∂ = adj(out, a)
-    push!(first_pass.args, :(($out, $∂) = $mod.StructuredMatrices.∂inv′($a)))
-    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
-    pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(out)) ))
+    push!(first_pass, :(($out, $∂) = $mod.StructuredMatrices.∂inv′($a)))
+    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+    pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a)), $∂, $(out)) ))
     nothing
 end
 SPECIAL_DIFF_RULES[:inv′] = SPECIAL_DIFF_RULE(inv′_diff_rule!)
 
-function mul_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function mul_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     @assert length(A) == 2
     a1 = A[1]
     a2 = A[2]
-    # push!(first_pass.args, :($out = Base.FastMath.mul_fast($a1, $a2)))
-    push!(first_pass.args, :($out = *($a1, $a2)))
+    # push!(first_pass, :($out = Base.FastMath.mul_fast($a1, $a2)))
+    push!(first_pass, :($out = *($a1, $a2)))
     if (a1 ∈ tracked_vars) || (a2 ∈ tracked_vars)
         push!(tracked_vars, out)
     else
@@ -154,21 +172,23 @@ function mul_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
         if a ∈ tracked_vars
             seeda = adj(a)
             ∂ = adj(out, a)
-            pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
+            pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
             push!(return_expr.args, ∂)
             push!(track_tup.args, true)
         else
             push!(track_tup.args, false)
         end
     end
-    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
-    pushfirst!(second_pass.args, :($(ProbabilityDistributions.return_expression(return_expr)) = $mod.∂mul($a1, $a2, Val{$track_tup}())))
+    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+    pushfirst!(second_pass, :($(ProbabilityDistributions.return_expression(return_expr)) = $mod.∂mul($a1, $a2, Val{$track_tup}())))
     nothing
 end
 SPECIAL_DIFF_RULES[:*] = SPECIAL_DIFF_RULE(mul_diff_rule!)
 
 
-function itp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function itp_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     ∂tup = Expr(:tuple, out)
     seedout = adj(out)
     track_out = false
@@ -182,21 +202,23 @@ function itp_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
             ∂ = adj(out, a)
             seeda = adj(a)
             push!(∂tup.args, ∂)
-            pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
+            pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
         else
             push!(track_tup.args, false)
         end
     end
-    push!(first_pass.args, :( $(ProbabilityDistributions.return_expression(∂tup)) = $mod.∂ITPExpectedValue($(A...), Val{$track_tup}())))
+    push!(first_pass, :( $(ProbabilityDistributions.return_expression(∂tup)) = $mod.∂ITPExpectedValue($(A...), Val{$track_tup}())))
     if track_out
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+        push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:ITPExpectedValue] = SPECIAL_DIFF_RULE(itp_diff_rule!)
 
-function hierarchical_centering_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function hierarchical_centering_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     # fourth arg would be Domains, which are not differentiable.
     length(A) == 4 && @assert A[4] ∉ tracked_vars
     func_output = Expr(:tuple, out)
@@ -209,16 +231,18 @@ function hierarchical_centering_diff_rule!(first_pass, second_pass, tracked_vars
             ∂ = adj(out, a)
             push!(func_output.args, ∂)
             seeda = adj(a)
-            pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
+            pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
         end
     end
-    push!(first_pass.args, :($func_output = ∂HierarchicalCentering($(A...), Val{$tracked}()) ) )
-    any(tracked) && push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+    push!(first_pass, :($func_output = ∂HierarchicalCentering($(A...), Val{$tracked}()) ) )
+    any(tracked) && push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 SPECIAL_DIFF_RULES[:HierarchicalCentering] = SPECIAL_DIFF_RULE(hierarchical_centering_diff_rule!)
 
-function tuple_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function tuple_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     seedout = adj(out)
     track = false
     seedsa = Vector{Union{Symbol,Nothing}}(undef, length(A))
@@ -227,72 +251,80 @@ function tuple_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, al
         if a ∈ tracked_vars
             track = true
             seeda = adj(a)
-            # pushfirst!(second_pass.args, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED($seedout[$i], $seeda )))
+            # pushfirst!(second_pass, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED($seedout[$i], $seeda )))
             seedsa[i] = seeda
-            addaliases!(aliases, seeda, seedout)
         else
             seedsa[i] = nothing
         end
     end
-    push!(first_pass.args, :($out = Core.tuple($(A...))))
+    push!(first_pass, :($out = Core.tuple($(A...))))
     if track
         push!(tracked_vars, out)
-        push!(first_pass.args, :($seedout = Core.tuple($(seedsa...))))
+        add_aliases!(aliases, seedout, seedsa)
+        push!(first_pass, :($seedout = Core.tuple($(seedsa...))))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:tuple] = SPECIAL_DIFF_RULE(tuple_diff_rule!)
 
-function diagonal_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function diagonal_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     @assert length(A) == 1
     a = A[1]
     if a ∈ tracked_vars
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        addaliases!(aliases, seeda, seedout)
-        push!(first_pass.args, :($seedout = $seeda))
-        # pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seedout, $seeda )))
+        add_aliases!(aliases, seeda, seedout)
+        push!(first_pass, :($seedout = $seeda))
+        # pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seedout, $seeda )))
     end
-    push!(first_pass.args, :($out = LinearAlgebra.Diagonal($a)))
+    push!(first_pass, :($out = LinearAlgebra.Diagonal($a)))
     nothing
 end
 SPECIAL_DIFF_RULES[:Diagonal] = SPECIAL_DIFF_RULE(diagonal_diff_rule!)
 
-function vec_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function vec_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     @assert length(A) == 1
     a = A[1]
-    push!(first_pass.args, :($out = vec($a)))
+    push!(first_pass, :($out = vec($a)))
     if a ∈ tracked_vars
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        addaliases!(aliases, seeda, seedout)
-        push!(first_pass.args, :($seedout = vec($seeda)))
+        add_aliases!(aliases, seeda, seedout)
+        push!(first_pass, :($seedout = vec($seeda)))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:vec] = SPECIAL_DIFF_RULE(vec_diff_rule!)
 
-function reshape_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alises)
+function reshape_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     @assert length(A) == 2
     a = A[1]
     shape = A[2]
-    push!(first_pass.args, :($out = reshape($a, $shape)))
+    push!(first_pass, :($out = reshape($a, $shape)))
     if a ∈ tracked_vars
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        addaliases!(aliases, seeda, seedout)
-        # pushfirst!(second_pass.args, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED(reshape($seedout, $mod.maybe_static_size($a)), $seeda) ))
-        push!(first_pass.args, :( $seedout = reshape($seeda, $shape)))
+        add_aliases!(aliases, seeda, seedout)
+        # pushfirst!(second_pass, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED(reshape($seedout, $mod.maybe_static_size($a)), $seeda) ))
+        push!(first_pass, :( $seedout = reshape($seeda, $shape)))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:reshape] = SPECIAL_DIFF_RULE(reshape_diff_rule!)
 
 
-function cov_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function cov_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     # For now, the only method is autoregressive * longitudinal model
     # so we assert that there are precisely three args.
     length(A) == 3 || throw("Please request or add support for different CovarianceMatrix functions!")
@@ -308,18 +340,20 @@ function cov_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
             ∂ = adj(out, a)
             push!(func_output.args, ∂)
             seeda = adj(a)
-            pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
+            pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
         end
     end
-    push!(first_pass.args, :($func_output = $mod.DistributionParameters.∂CovarianceMatrix($(A...), Val{$tracked}()) ) )
-    any(tracked) && push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+    push!(first_pass, :($func_output = $mod.DistributionParameters.∂CovarianceMatrix($(A...), Val{$tracked}()) ) )
+    any(tracked) && push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 SPECIAL_DIFF_RULES[:CovarianceMatrix] = SPECIAL_DIFF_RULE(cov_diff_rule!)
 
 # Only views have been implemented so far.
-function getindex_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
-    Ninds = length(A) - 1
+function getindex_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing 
+   Ninds = length(A) - 1
     for i ∈ 1:Ninds
         @assert A[i+1] ∉ tracked_vars
     end
@@ -329,23 +363,25 @@ function getindex_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod,
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        pushfirst!(second_pass.args, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
-        push!(first_pass.args, :(($out, $∂) = $mod.PaddedMatrices.∂getindex($(A...))))
-        # push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
-        push!(first_pass.args, :($seedout = $seeda[$([A[i+1] for i ∈ 1:Ninds]...)]))
-        addaliases!(aliases, seeda, seedout)
+        pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
+        push!(first_pass, :(($out, $∂) = $mod.PaddedMatrices.∂getindex($(A...))))
+        # push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+        push!(first_pass, :($seedout = $seeda[$([A[i+1] for i ∈ 1:Ninds]...)]))
+        add_aliases!(aliases, seeda, seedout)
     elseif a isa Expr && a.head == :tuple
         # terrible hack!!!!
         # TODO: DO THIS CORRECTLY
         # That is, have check for tuple packing and unpacking.
     else
-        push!(first_pass.args, :($out = getindex($(A...))))
+        push!(first_pass, :($out = getindex($(A...))))
     end
     nothing
 end
 SPECIAL_DIFF_RULES[:getindex] = SPECIAL_DIFF_RULE(getindex_diff_rule!)
 
-function rank_update_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
+function rank_update_diff_rule!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+)::Nothing
     # This function will have to be updated once we add rank updates for things other than
     # a cholesky decomposition.
     Lsym, xsym = A[1], A[2]
@@ -353,7 +389,7 @@ function rank_update_diff_rule!(first_pass, second_pass, tracked_vars, out, A, m
     track_x = xsym ∈ tracked_vars
     track = track_L | track_x
     push!(tracked_vars, out)
-    push!(first_pass.args, Expr(:(=), out, :(StructuredMatrices.rank_update($(A...)))))
+    push!(first_pass, Expr(:(=), out, :(StructuredMatrices.rank_update($(A...)))))
     track || return
     # That is because we differentiate by differentiating the expression:
     # out = chol( L * L' + x * x' )
@@ -386,8 +422,8 @@ function rank_update_diff_rule!(first_pass, second_pass, tracked_vars, out, A, m
     end
     track_L && push!(q.args, :($mod.RESERVED_INCREMENT_SEED_RESERVED!($seedL, $seedLtemp)))
     track_x && push!(q.args, :($mod.RESERVED_INCREMENT_SEED_RESERVED!($seedx, $seedxtemp)))
-    pushfirst!(second_pass.args, q)
-    push!(first_pass.args, :($seedout = $mod.alloc_adjoint($out)))
+    pushfirst!(second_pass, q)
+    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 SPECIAL_DIFF_RULES[:rank_update] = SPECIAL_DIFF_RULE(rank_update_diff_rule!)
