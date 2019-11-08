@@ -51,7 +51,8 @@ function log_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
 end
 SPECIAL_DIFF_RULES[:log] = SPECIAL_DIFF_RULE(log_diff_rule!)
 function plus_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, aliases)
-    push!(first_pass.args, :($out = Base.FastMath.add_fast($(A...)) ))
+    # push!(first_pass.args, :($out = Base.FastMath.add_fast($(A...)) ))
+    push!(first_pass.args, :($out = +($(A...)) ))
     track_out = false
     seedout = adj(out)
     for i ∈ eachindex(A)
@@ -138,7 +139,8 @@ function mul_diff_rule!(first_pass, second_pass, tracked_vars, out, A, mod, alia
     @assert length(A) == 2
     a1 = A[1]
     a2 = A[2]
-    push!(first_pass.args, :($out = Base.FastMath.mul_fast($a1, $a2)))
+    # push!(first_pass.args, :($out = Base.FastMath.mul_fast($a1, $a2)))
+    push!(first_pass.args, :($out = *($a1, $a2)))
     if (a1 ∈ tracked_vars) || (a2 ∈ tracked_vars)
         push!(tracked_vars, out)
     else
