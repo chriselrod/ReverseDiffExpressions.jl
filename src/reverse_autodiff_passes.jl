@@ -1,19 +1,22 @@
 const NOOPDIFFS = Set{Symbol}( ( :AutoregressiveMatrix, :adjoint ))
 
-function noopdiff!(first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars, out, f, A, mod)
+function noopdiff!(
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, f, A, mod::Symbol
+)
     track = false
-    seedout = adj(out)
+    adjout = adj(out)
+    push!(first_pass, :($out = $f($(A...))))
     for i ∈ eachindex(A)
-        a = A[i]
+        a = (A[i])::Symbol
         a ∈ tracked_vars || continue
         track = true
-        seeda = adj(a)
-        # pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(Symbol("##∂target/∂", a, "##")), $∂, $(Symbol("##∂target/∂", out, "##")))))
-        pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!( $seeda, $seedout )))
+        adja = adj(a)
+        push!(first_pass, :($adjout = $adja))
+        # pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!( $seeda, $seedout )))
     end
     track && push!(tracked_vars, out)
-    push!(first_pass, :($out = $f($(A...))))
-    push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
+    add_aliases!(ivt, adjout, length(A) == 1 ? adj(first(A)) : adj.(A))
+    # push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     nothing
 end
 
@@ -44,6 +47,8 @@ function uninitialize_args!(second_pass, ivt::InitializedVarTracker, mod)
         if @capture(ex, MOD_.RESERVED_INCREMENT_SEED_RESERVED!(S_, args__))
             q = @q begin end
             if initialize!(ivt, q.args, S, S, mod)
+                # @show ivt.initialized
+                # @show S, args
                 second_pass[i] = :($mod.RESERVED_INCREMENT_SEED_RESERVED!($mod.uninitialized($S), $(args...)))
             elseif length(q.args) > 0 # only possible if initialize is false
                 push!(q.args, ex)
@@ -67,6 +72,7 @@ function reverse_diff_pass!(first_pass::Vector{Any}, second_pass::Vector{Any}, e
         end
         x
     end
+    # @show ivt.initialized
     uninitialize_args!(second_pass, ivt, mod)
 end
 
@@ -75,7 +81,7 @@ function apply_diff_rule!(first_pass::Vector{Any}, second_pass::Vector{Any}, tra
     push!(first_pass, :($out = $f($(A...))))
     seedout = adj(out)
     for i ∈ eachindex(A)
-        a = A[i]
+        a = (A[i])::Symbol
         a ∈ tracked_vars || continue
         track_out = true
         ∂ = adj(out, a)
@@ -93,7 +99,7 @@ function apply_diff_rule!(first_pass::Vector{Any}, second_pass::Vector{Any}, tra
     track_out = false
     push!(first_pass, :($out = $f($(A...))))
     seedout = adj(out)
-    a = A[1]
+    a = (A[1])::Symbol
     a ∈ tracked_vars || return
     ∂ = adj(out, a)
     push!(first_pass, :($∂ = $(diffrule)))
@@ -118,7 +124,11 @@ will be added.
 "first_pass" is an expression of the forward pass, while
 "second_pass" is an expression for the reverse pass.
 """
-function differentiate!(first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars, ivt, out, f, A, mod, verbose = false)
+function differentiate!(
+    first_pass::Vector{Any}, second_pass::Vector{Any},
+    tracked_vars::Set{Symbol}, ivt::InitializedVarTracker,
+    out::Symbol, f, A::Vector{Any}, mod, verbose::Bool = false
+)
 #    @show f, typeof(f), A, (A .∈ Ref(tracked_vars))
 #    @show f, out, A, (A .∈ Ref(tracked_vars))
     if !any(a -> a ∈ tracked_vars, A)
@@ -133,17 +143,17 @@ function differentiate!(first_pass::Vector{Any}, second_pass::Vector{Any}, track
     elseif @capture(f, M_.F_) # TODO: Come up with better system that can use modules.
         F == :getproperty && return
         if F ∈ keys(SPECIAL_DIFF_RULES)
-            SPECIAL_DIFF_RULES[F](first_pass, second_pass, tracked_vars, out, A, mod)
+            SPECIAL_DIFF_RULES[F](first_pass, second_pass, tracked_vars, ivt, out, A, mod)
         elseif DiffRules.hasdiffrule(M, F, arity)
             apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, DiffRules.diffrule(M, F, A...), mod)
         elseif F ∈ NOOPDIFFS            
-            noopdiff!(first_pass, second_pass, tracked_vars, out, f, A, mod)
+            noopdiff!(first_pass, second_pass, tracked_vars, ivt, out, f, A, mod)
         else
             throw("Function $f with arguments $A is not yet supported.")
         end
 #        tuple_diff_rule!(first_pass, second_pass, tracked_vars, out, A)
     elseif f ∈ NOOPDIFFS
-        noopdiff!(first_pass, second_pass, tracked_vars, out, f, A, mod)
+        noopdiff!(first_pass, second_pass, tracked_vars, ivt, out, f, A, mod)
     elseif DiffRules.hasdiffrule(:Base, f, arity)
         apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, DiffRules.diffrule(:Base, f, A...), mod)
     elseif DiffRules.hasdiffrule(:SpecialFunctions, f, arity)

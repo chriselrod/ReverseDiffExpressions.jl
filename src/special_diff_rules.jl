@@ -34,7 +34,7 @@ function vexp_diff_rule!(
     push!(tracked_vars, out)
     ∂ = adj(out, a)
     seedout = adj(out); seeda = adj(a)
-    push!(first_pass, :($∂ = Diagonal($out)))
+    push!(first_pass, :($∂ = $mod.Diagonal($out)))
     push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
     pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout)))
     nothing
@@ -260,7 +260,7 @@ function tuple_diff_rule!(
     push!(first_pass, :($out = Core.tuple($(A...))))
     if track
         push!(tracked_vars, out)
-        add_aliases!(aliases, seedout, seedsa)
+        add_aliases!(ivt, seedout, seedsa)
         push!(first_pass, :($seedout = Core.tuple($(seedsa...))))
     end
     nothing
@@ -276,11 +276,11 @@ function diagonal_diff_rule!(
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        add_aliases!(aliases, seeda, seedout)
+        add_aliases!(ivt, seeda, seedout)
         push!(first_pass, :($seedout = $seeda))
         # pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seedout, $seeda )))
     end
-    push!(first_pass, :($out = LinearAlgebra.Diagonal($a)))
+    push!(first_pass, :($out = $mod.Diagonal($a)))
     nothing
 end
 SPECIAL_DIFF_RULES[:Diagonal] = SPECIAL_DIFF_RULE(diagonal_diff_rule!)
@@ -295,7 +295,7 @@ function vec_diff_rule!(
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        add_aliases!(aliases, seeda, seedout)
+        add_aliases!(ivt, seeda, seedout)
         push!(first_pass, :($seedout = vec($seeda)))
     end
     nothing
@@ -313,7 +313,7 @@ function reshape_diff_rule!(
         push!(tracked_vars, out)
         seeda = adj(a)
         seedout = adj(out)
-        add_aliases!(aliases, seeda, seedout)
+        add_aliases!(ivt, seeda, seedout)
         # pushfirst!(second_pass, :( $seeda = $mod.RESERVED_INCREMENT_SEED_RESERVED(reshape($seedout, $mod.maybe_static_size($a)), $seeda) ))
         push!(first_pass, :( $seedout = reshape($seeda, $shape)))
     end
@@ -357,21 +357,20 @@ function getindex_diff_rule!(
     for i ∈ 1:Ninds
         @assert A[i+1] ∉ tracked_vars
     end
-    a = A[1]
+    a = first(A)
     if a ∈ tracked_vars
-        ∂ = adj(out, a)
         push!(tracked_vars, out)
-        seeda = adj(a)
-        seedout = adj(out)
-        pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($seeda, $∂, $seedout )))
-        push!(first_pass, :(($out, $∂) = $mod.PaddedMatrices.∂getindex($(A...))))
-        # push!(first_pass, :($seedout = $mod.alloc_adjoint($out)))
-        push!(first_pass, :($seedout = $seeda[$([A[i+1] for i ∈ 1:Ninds]...)]))
-        add_aliases!(aliases, seeda, seedout)
+        inds = [A[i+1] for i ∈ 1:Ninds]
+        adja = adj(a); adjout = adj(out)
+        push!(first_pass, Expr(:(=), out, Expr(:call, :view, a, inds...)))
+        push!(first_pass, Expr(:(=), adjout, Expr(:call, :view, adja, inds...)))
+        add_aliases!(ivt, adja, adjout)
+        if initialize!(ivt, first_pass, adjout, adja, mod)
+            push!(first_pass.args, :(fill!($adja, zero(eltype($adja)))))
+        end
     elseif a isa Expr && a.head == :tuple
-        # terrible hack!!!!
-        # TODO: DO THIS CORRECTLY
-        # That is, have check for tuple packing and unpacking.
+        #TODO: implement this
+        throw("Indexing and unpacking not yet supported.")
     else
         push!(first_pass, :($out = getindex($(A...))))
     end
