@@ -109,6 +109,34 @@ function apply_diff_rule!(first_pass::Vector{Any}, second_pass::Vector{Any}, tra
     nothing
 end
 
+function ∂evaluate_rule!(first_pass, second_pass, tracked_vars, out, f, A, mod)
+    track = Expr(:tuple, )
+    track_out = false
+    for a ∈ A
+        if a ∈ tracked_vars
+            track_out = true
+            push!(track.args, true)
+        else
+            push!(track.args, false)
+        end
+    end
+    adjout = adj(out)
+    if !track_out
+        push!(first_pass, Expr(:(=), out, Expr(:call, f, A...)))
+        return
+    end
+    pullback = gensym(:pullback)
+    push!(first_pass, Expr(:(=), Expr(:tuple, out, pullback), Expr(:call, :($mod.∂evaluate), :(Val{$track}()), f, A...)))
+    push!(tracked_vars, out)
+    push!(first_pass, :($adjout = $mod.alloc_adjoint($out)))
+    ∂ = gensym(:∂)
+    for (n,a) ∈ enumerate(reverse(A))
+        a ∈ tracked_vars || continue
+        pushfirst!(second_pass, Expr(:call, :($mod.RESERVED_INCREMENT_SEED_RESERVED!), adj(a), :(@inbounds $∂[$(length(A) + 1 - n)])))
+    end
+    pushfirst!(second_pass, Expr(:(=), :∂, Expr(:call, pullback, adjout)))
+    nothing
+end
 
 """
 This function applies reverse mode AD.
@@ -158,11 +186,8 @@ function differentiate!(
         apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, DiffRules.diffrule(:Base, f, A...), mod)
     elseif DiffRules.hasdiffrule(:SpecialFunctions, f, arity)
         apply_diff_rule!(first_pass, second_pass, tracked_vars, out, f, A, DiffRules.diffrule(:SpecialFunctions, f, A...), mod)
-    else # ForwardDiff?
-        throw("Function $f with arguments $A is not yet supported.")
-        # Or, for now, Zygote for univariate.
-#        zygote_diff_rule!(first_pass, second_pass, tracked_vars, out, A, f)
-        # throw("Fall back differention rules not yet implemented, and no method yet to handle $f($(A...))")
+    else
+        ∂evaluate_rule!(first_pass, second_pass, tracked_vars, out, f, A, mod)
     end
     nothing
 end
