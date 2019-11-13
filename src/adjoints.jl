@@ -144,10 +144,36 @@ end
     end
 end
 
+@generated function RESERVED_INCREMENT_SEED_RESERVED!(
+    seedout::AbstractMutableFixedSizeVector{M,T,L},
+    jac::UniformScaling{T},
+    seedin::AbstractFixedSizeVector{M,T,L}
+) where {M,T,L}
+    op = seedout <: UninitializedVector ? :(=) : :(+=)
+    quote
+        $(Expr(:meta,:inline))
+        j = jac.λ
+        @vvectorize $T for m ∈ 1:$M
+            $(Expr(op, :(seedout[m]), :(j * seedin[m])))
+        end
+    end
+end
+
 #@inline ∂mul(x, y, ::Val{(true,true)}) = ((@show typeof(x), typeof(y)); return y, x)
-@inline ∂mul(x, y, ::Val{(true,true)}) = y, x
-@inline ∂mul(x, y, ::Val{(true,false)}) = y
-@inline ∂mul(x, y, ::Val{(false,true)}) = x
+@inline ∂mul(x, y, ::Val{(true,true)}) = y', x'
+@inline ∂mul(x, y, ::Val{(true,false)}) = y'
+@inline ∂mul(x, y, ::Val{(false,true)}) = x'
+@inline ∂mul(x::Real, y::Real, ::Val{(true,true)}) = y, x
+@inline ∂mul(x::Real, y::Real, ::Val{(true,false)}) = y
+@inline ∂mul(x::Real, y::Real, ::Val{(false,true)}) = x
+
+@inline ∂mul(x::AbstractVector, y::Real, ::Val{(true,true)}) = y, Diagonal(x)
+@inline ∂mul(x::AbstractVector, y::Real, ::Val{(true,false)}) = y
+@inline ∂mul(x::AbstractVector, y::Real, ::Val{(false,true)}) = Diagonl(x)
+
+@inline ∂mul(x::Real, y::AbstractVector, ::Val{(true,true)}) = y, UniformScaling(x)
+@inline ∂mul(x::Real, y::AbstractVector, ::Val{(true,false)}) = y
+@inline ∂mul(x::Real, y::AbstractVector, ::Val{(false,true)}) = UniformScaling(x)
 
 @inline function ∂mul(
     D::LinearAlgebra.Diagonal{T,<:AbstractFixedSizeVector{M,T,P}},

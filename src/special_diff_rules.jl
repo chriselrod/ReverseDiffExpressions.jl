@@ -169,8 +169,9 @@ function mul_diff_rule!(
     adjout = adj(out)
     ∂a₁ = adj(out, a₁)
     ∂a₂ = adj(out, a₂)
-    a₁t && pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₁)), $adjout, $∂a₁' )))
-    a₂t && pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₂)), $∂a₂', $adjout )))
+    # pushfirst!(second_pass, :( $mod.lifetime_end( $adjout ) ) )
+    a₁t && pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₁)), $adjout, $∂a₁ )))
+    a₂t && pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(adj(a₂)), $∂a₂, $adjout )))
     if a₁t && a₂t
         pushfirst!(second_pass, :(($∂a₁,$∂a₂) = $mod.∂mul($a₁, $a₂, Val{(true,true)}())))
     elseif a₁t

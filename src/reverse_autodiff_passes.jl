@@ -42,15 +42,17 @@ end
     # nothing
 # end
 
+# 
+
 function uninitialize_args!(second_pass, ivt::InitializedVarTracker, mod)
     for (i,ex) ∈ enumerate(second_pass)
         if @capture(ex, MOD_.RESERVED_INCREMENT_SEED_RESERVED!(S_, args__))
             q = @q begin end
             if initialize!(ivt, q.args, S, S, mod)
-                # @show ivt.initialized
-                # @show S, args
                 second_pass[i] = :($mod.RESERVED_INCREMENT_SEED_RESERVED!($mod.uninitialized($S), $(args...)))
-            elseif length(q.args) > 0 # only possible if initialize is false
+            elseif length(q.args) > 0
+                # branch only possible if initialize is false
+                # means we are adding some zero_initialize! statements
                 push!(q.args, ex)
                 second_pass[i] = q
             end
