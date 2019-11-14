@@ -59,6 +59,25 @@ function uninitialize_args!(second_pass, ivt::InitializedVarTracker, mod)
         end
     end
 end
+function free_args!(pass::Vector{Any}, ivt::InitializedVarTracker, mod)
+    deallocate = Symbol[]
+    for i ∈ eachindex(pass)
+        j = length(pass) + 1 - i # reverse
+        expr = pass[j]
+        if expr isa Expr
+            postwalk(expr) do ex
+                if ex isa Symbol && isallocated(ivt, ex)
+                    deallocate!(ivt, deallocate, ex, ex) # Each deallocate! deallocates entire alias tree, so we wont deallocate again earlier in the expression
+                end
+                ex
+            end
+            while length(deallocate) > 0
+                push!(expr.args, :($mod.lifetime_end!($(pop!(deallocate)))))
+            end
+        end
+    end
+end
+
 
 function reverse_diff_pass!(first_pass::Vector{Any}, second_pass::Vector{Any}, expr, tracked_vars, mod, verbose = false)
     ivt = InitializedVarTracker()
@@ -75,7 +94,9 @@ function reverse_diff_pass!(first_pass::Vector{Any}, second_pass::Vector{Any}, e
         x
     end
     # @show ivt.initialized
-    uninitialize_args!(second_pass, ivt, mod)
+    uninitialize_args!(second_pass, ivt, mod) # make sure adjoints are uninitialized on first write
+    free_args!(second_pass, ivt, mod) 
+    free_args!(first_pass, ivt, mod) 
 end
 
 function apply_diff_rule!(first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars, out, f, A, diffrules::NTuple{N}, mod) where {N}

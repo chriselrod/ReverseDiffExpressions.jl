@@ -15,7 +15,7 @@ using MacroTools: postwalk, prewalk, @capture, @q
 
 # import SIMDPirates: vsum, vadd, vifelse
 import ReverseDiffExpressionsBase: adj, ∂mul, ∂getindex, RESERVED_INCREMENT_SEED_RESERVED!,
-    InitializedVarTracker, add_aliases!, initialize!
+    InitializedVarTracker, add_aliases!, allocate!, initialize!, isallocated, deallocate!
 
 
 
