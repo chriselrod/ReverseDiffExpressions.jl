@@ -71,8 +71,12 @@ function free_args!(pass::Vector{Any}, ivt::InitializedVarTracker, mod)
                 end
                 ex
             end
-            while length(deallocate) > 0
-                push!(expr.args, :($mod.lifetime_end!($(pop!(deallocate)))))
+            if length(deallocate) > 0
+                q = Expr(:block, expr)
+                while length(deallocate) > 0
+                    push!(q.args, :($mod.lifetime_end!($(pop!(deallocate)))))
+                end
+                pass[j] = q
             end
         end
     end
