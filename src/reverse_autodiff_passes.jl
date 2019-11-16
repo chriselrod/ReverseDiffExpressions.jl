@@ -161,7 +161,7 @@ function ∂evaluate_rule!(first_pass, second_pass, tracked_vars, out, f, A, mod
         a ∈ tracked_vars || continue
         pushfirst!(second_pass, Expr(:call, :($mod.RESERVED_INCREMENT_SEED_RESERVED!), adj(a), :(@inbounds $∂[$(length(A) + 1 - n)])))
     end
-    pushfirst!(second_pass, Expr(:(=), :∂, Expr(:call, pullback, adjout)))
+    pushfirst!(second_pass, Expr(:(=), ∂, Expr(:call, pullback, adjout)))
     nothing
 end
 
