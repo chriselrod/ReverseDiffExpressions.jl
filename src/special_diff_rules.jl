@@ -6,11 +6,11 @@
 # DiffRules.diffrule(:Base, :^, :x, :y)
 
 
-const SPECIAL_DIFF_RULE = FunctionWrapper{Nothing,Tuple{Vector{Any},Vector{Any},Set{Symbol},InitializedVarTracker,Symbol,Vector{Symbol},Symbol}}
+const SPECIAL_DIFF_RULE = FunctionWrapper{Nothing,Tuple{Vector{Any},Vector{Any},Set{Symbol},InitializedVarTracker,Symbol,Vector{Any},Symbol}}
 const SPECIAL_DIFF_RULES = Dict{Symbol,SPECIAL_DIFF_RULE}()
 
 function exp_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     a = first(A)
     # allocate!(ivt, first_pass, out, mod)
@@ -30,7 +30,7 @@ function exp_diff_rule!(
 end
 SPECIAL_DIFF_RULES[:exp] = SPECIAL_DIFF_RULE(exp_diff_rule!)
 function vexp_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     a = first(A)
     push!(first_pass, :($out = similar($a)))
@@ -49,7 +49,7 @@ function vexp_diff_rule!(
 end
 SPECIAL_DIFF_RULES[:vexp] = SPECIAL_DIFF_RULE(vexp_diff_rule!)
 function log_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     a = first(A)
     # allocate!(ivt, first_pass, out, mod)
@@ -69,7 +69,7 @@ function log_diff_rule!(
 end
 SPECIAL_DIFF_RULES[:log] = SPECIAL_DIFF_RULE(log_diff_rule!)
 function plus_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     # push!(first_pass, :($out = Base.FastMath.add_fast($(A...)) ))
     track_out = false
@@ -96,7 +96,7 @@ end
 SPECIAL_DIFF_RULES[:+] = SPECIAL_DIFF_RULE(plus_diff_rule!)
 # add is specifically for DistributionsParameters.Target
 function add_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     track_out = false
     adjout = adj(out)
@@ -121,7 +121,7 @@ function add_diff_rule!(
 end
 SPECIAL_DIFF_RULES[:vadd] = SPECIAL_DIFF_RULE(add_diff_rule!)
 function minus_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     @assert length(A) == 2
     a₁ = A[1]
@@ -144,7 +144,7 @@ function minus_diff_rule!(
 end
 SPECIAL_DIFF_RULES[:-] = SPECIAL_DIFF_RULE(minus_diff_rule!)
 function inv_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     a = A[1]
     if a ∉ tracked_vars
@@ -166,7 +166,7 @@ function inv_diff_rule!(
 end
 SPECIAL_DIFF_RULES[:inv] = SPECIAL_DIFF_RULE(inv_diff_rule!)
 function inv′_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     a = A[1]
     if a ∉ tracked_vars
@@ -189,7 +189,7 @@ end
 SPECIAL_DIFF_RULES[:inv′] = SPECIAL_DIFF_RULE(inv′_diff_rule!)
 
 function mul_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     @assert length(A) == 2
     a₁ = A[1]
@@ -226,7 +226,7 @@ SPECIAL_DIFF_RULES[:*] = SPECIAL_DIFF_RULE(mul_diff_rule!)
 
 
 function itp_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     ∂tup = Expr(:tuple, out)
     adjout = adj(out)
@@ -261,7 +261,7 @@ end
 SPECIAL_DIFF_RULES[:ITPExpectedValue] = SPECIAL_DIFF_RULE(itp_diff_rule!)
 
 function hierarchical_centering_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     # fourth arg would be Domains, which are not differentiable.
     length(A) == 4 && @assert A[4] ∉ tracked_vars
@@ -293,7 +293,7 @@ end
 SPECIAL_DIFF_RULES[:HierarchicalCentering] = SPECIAL_DIFF_RULE(hierarchical_centering_diff_rule!)
 
 function tuple_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     adjout = adj(out)
     track = false
@@ -321,7 +321,7 @@ end
 SPECIAL_DIFF_RULES[:tuple] = SPECIAL_DIFF_RULE(tuple_diff_rule!)
 
 function diagonal_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     @assert length(A) == 1
     a = A[1]
@@ -340,7 +340,7 @@ end
 SPECIAL_DIFF_RULES[:Diagonal] = SPECIAL_DIFF_RULE(diagonal_diff_rule!)
 
 function vec_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     @assert length(A) == 1
     a = A[1]
@@ -358,7 +358,7 @@ end
 SPECIAL_DIFF_RULES[:vec] = SPECIAL_DIFF_RULE(vec_diff_rule!)
 
 function reshape_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     @assert length(A) == 2
     a = A[1]
@@ -379,7 +379,7 @@ SPECIAL_DIFF_RULES[:reshape] = SPECIAL_DIFF_RULE(reshape_diff_rule!)
 
 
 function cov_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     # For now, the only method is autoregressive * longitudinal model
     # so we assert that there are precisely three args.
@@ -416,7 +416,7 @@ SPECIAL_DIFF_RULES[:CovarianceMatrix] = SPECIAL_DIFF_RULE(cov_diff_rule!)
 
 # Only views have been implemented so far.
 function getindex_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing 
    Ninds = length(A) - 1
     for i ∈ 1:Ninds
@@ -445,7 +445,7 @@ end
 SPECIAL_DIFF_RULES[:getindex] = SPECIAL_DIFF_RULE(getindex_diff_rule!)
 
 function rank_update_diff_rule!(
-    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Symbol}, mod::Symbol
+    first_pass::Vector{Any}, second_pass::Vector{Any}, tracked_vars::Set{Symbol}, ivt::InitializedVarTracker, out::Symbol, A::Vector{Any}, mod::Symbol
 )::Nothing
     # This function will have to be updated once we add rank updates for things other than
     # a cholesky decomposition.
