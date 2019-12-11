@@ -23,10 +23,13 @@ include("adjoints.jl")
 include("misc_functions.jl")
 include("special_diff_rules.jl")
 include("reverse_autodiff_passes.jl")
+include("precompile.jl")
+_precompile_()
 
 @def_stackpointer_fallback emax_dose_response ITPExpectedValue ∂ITPExpectedValue HierarchicalCentering ∂HierarchicalCentering
 function __init__()
     @add_stackpointer_method emax_dose_response ITPExpectedValue ∂ITPExpectedValue HierarchicalCentering ∂HierarchicalCentering
+    _precompile_()
 end
 
 end # module
