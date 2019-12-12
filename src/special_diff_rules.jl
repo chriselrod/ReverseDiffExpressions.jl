@@ -1,6 +1,4 @@
 
-# using MacroTools, DiffRules
-# using MacroTools: @capture, postwalk, prewalk, @q, striplines
 # DiffRules.hasdiffrule(:Base, :exp, 1)
 # DiffRules.diffrule(:Base, :exp, :x)
 # DiffRules.diffrule(:Base, :^, :x, :y)

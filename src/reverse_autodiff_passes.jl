@@ -46,16 +46,21 @@ end
 
 function uninitialize_args!(second_pass, ivt::InitializedVarTracker, mod)
     for (i,ex) ∈ enumerate(second_pass)
-        if @capture(ex, MOD_.RESERVED_INCREMENT_SEED_RESERVED!(S_, args__))
-            q = @q begin end
-            if initialize!(ivt, q.args, S, S, mod)
-                second_pass[i] = :($mod.RESERVED_INCREMENT_SEED_RESERVED!($mod.uninitialized($S), $(args...)))
-            elseif length(q.args) > 0
-                # branch only possible if initialize is false
-                # means we are adding some zero_initialize! statements
-                push!(q.args, ex)
-                second_pass[i] = q
-            end
+        (ex isa Expr && ex.head === :call) || continue
+        f = first(ex.args)
+        (f isa Expr && f.head === :(.)) || continue
+        f.args[2].value === :RESERVED_INCREMENT_SEED_RESERVED! || continue
+        S = ex.args[2]
+        args = @view(ex.args[3:end])
+        q = Expr(:block,)
+        if initialize!(ivt, q.args, S, S, mod)
+            ex.args[2] = Expr(:call, Expr(:(.), mod, :uninitialized), S)
+            second_pass[i] = ex
+        elseif length(q.args) > 0
+            # branch only possible if initialize is false
+            # and we are adding some zero_initialize! statements
+            push!(q.args, ex)
+            second_pass[i] = q
         end
     end
 end
@@ -86,16 +91,11 @@ end
 function reverse_diff_pass!(first_pass::Vector{Any}, second_pass::Vector{Any}, expr, tracked_vars, mod, verbose = false)
     ivt = InitializedVarTracker()
     postwalk(expr) do x
-        if @capture(x, out_ = f_(A__))
-            differentiate!(first_pass, second_pass, tracked_vars, ivt, out, f, A, mod, verbose)
-        elseif @capture(x, out_ = A_) && isa(A, Symbol)
-            throw("Assignment without op should have been eliminated in earlier pass.")
-            push!(first_pass, x)
-            push!(first_pass, :($(adj(out)) = $mod.seed(out)))
-            pushfirst!(second_pass, :( $mod.RESERVED_INCREMENT_SEED_RESERVED!($(Symbol("###seed###", A)), $(Symbol("###seed###", out)) )) )
-            A ∈ tracked_vars && push!(tracked_vars, out)
-        end
-        x
+        (x isa Expr && x.head === :(=)) || return x
+        LHS = x.args[1]
+        RHS = x.args[2]
+        @assert RHS isa Expr && RHS.head === :call "Expression should have been lowered to canonical form."
+        differentiate!(first_pass, second_pass, tracked_vars, ivt, LHS, first(RHS.args), RHS.args[2:end], mod, verbose)
     end
     # @show ivt.initialized
     uninitialize_args!(second_pass, ivt, mod) # make sure adjoints are uninitialized on first write
@@ -195,8 +195,11 @@ function differentiate!(
         ProbabilityDistributions.distribution_diff_rule!(ivt, first_pass, tracked_vars, mod, out, A, f, verbose)
     elseif haskey(SPECIAL_DIFF_RULES, f)
         SPECIAL_DIFF_RULES[f](first_pass, second_pass, tracked_vars, ivt, out, A, mod)
-    elseif @capture(f, M_.F_) # TODO: Come up with better system that can use modules.
-        F == :getproperty && return
+    elseif f isa Expr && f.head === :(.)
+        M = f.args[1]
+        F = f.args[2].value
+        # TODO: Come up with better system that can use modules.
+        F === :getproperty && return
         if F ∈ keys(SPECIAL_DIFF_RULES)
             SPECIAL_DIFF_RULES[F](first_pass, second_pass, tracked_vars, ivt, out, A, mod)
         elseif DiffRules.hasdiffrule(M, F, arity)
