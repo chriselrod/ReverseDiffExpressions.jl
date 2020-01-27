@@ -1,10 +1,12 @@
 
-using LoopVectorization: LoopSet, operations, isload, iscompute, isstore, loopdependencies, refname, name, lower, parents,
+using LoopVectorization:
+    LoopSet, operations, isload, iscompute, isstore,
+    loopdependencies, refname, name, lower, parents,
     Operation
 
 struct ∂LoopSet
     ls::LoopSet
-    ∂ls::LoopSet
+    ∂ls::Vector{LoopSet}
     visited_ops::Vector{Bool}
     tracked_ops::Vector{Bool}
     tracked_vars::Set{Symbol}
@@ -12,14 +14,14 @@ end
 
 function ∂LoopSet(ls::LoopSet, tracked_vars::Set{Symbol})
     nops = length(operations(ls))
-    ∂ls = ∂LoopSet(ls, LoopSet(), fill(false, nops), fill(false, nops),  tracked_vars)
+    ∂ls = ∂LoopSet(ls, LoopSet[], fill(false, nops), fill(false, nops),  tracked_vars)
     copy!(∂ls.∂ls.loops, ls.loops)
     ∂ls
 end
 firstpass(∂ls::∂LoopSet) = ∂ls.ls
-secondpass(∂ls::∂LoopSet) = ∂ls.∂ls
+secondpasses(∂ls::∂LoopSet) = ∂ls.∂ls
 LoopVectorization.lower(∂ls::∂LoopSet) = lower(firstpass(∂ls))
-∂lower(∂ls::∂LoopSet) = lower(secondpass(∂ls))
+∂lower(∂ls::∂LoopSet, i) = lower(secondpasses(∂ls[i]))
 istracked(∂ls::∂LoopSet, i::Int) = ∂ls.tracked_ops[i]
 istracked(∂ls::∂LoopSet, op::Operation) = ∂ls.tracked_ops[identifier(op)]
 visited(∂ls::∂LoopSet, i::Int) = ∂ls.visited_ops[i]
