@@ -125,24 +125,55 @@ function first_pass!(∂ls::∂LoopSet, lsold::LoopSet)
         instr = instruction(op)
         loopdeps = loopdependencies(op); reduceddeps = reduceddependencies(op); reducedc = reducedchildren(op);
         if isconstant(op)
-            lsnew[i] = Operation(
+            newops[i] = Operation(
                 i - 1, name(op), 8, instr, constant, loopdeps, reduceddeps, NOPARENTS, NOTAREFERENCE, reducedc
             )
         elseif isload(op)
-            lsnew[i] = Operation(
+            newops[i] = Operation(
                 i - 1, name(op), 8, instr, memload, loopdeps, reduceddeps, NOPARENTS, op.ref, reducedc
             )
         else
-            op_parents = [lsnew[identifier(opp)] for opp ∈ parents(op)]
+            op_parents = [newops[identifier(opp)] for opp ∈ parents(op)]
             if iscompute(op)
                 if tracked_ops[i]
-                    diffrule = DERIVATIVERULES[instr]
-
+                    nops = length(newops)
+                    nargs = length(op_parents)
+                    diffrule = DERIVATIVERULES[InstructionArgs(instr, nargs)]
+                    retind = first(diffrule.returns) # this will be the instruction that takes the place of op
+                    # now, we
+                    for j ∈ first(diffrule.sections)
+                        instrⱼ = diffrule.instructions[j]
+                        instrdepsⱼ = diffrule.dependencies[j]
+                        vparentⱼ = Vector{Operation}(undef, length(instrdepsⱼ))
+                        for (k,d) ∈ enumerate(instrdepsⱼ)
+                            @assert (d != 0) & (d ≥ -nargs)
+                            if d < 0 # we index into parents
+                                vparentⱼ[k] = op_parents[nargs + 1 + d]
+                            elseif d > 0
+                                vparentⱼ[k] = newops[nops + d]
+                            end
+                        end
+                        # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
+                        if instrdepsⱼ == -nargs:-1
+                        else
+                        end
+                        if j == retind
+                            newops[j] = Operation(
+                                i - 1, name(op), 8, instrⱼ, compute, 
+                            )
+                        else
+                            push!(newops, Operation(
+                                length(newops), gensym(:firstpassintermediary), 8, instrⱼ, compute, 
+                            ))
+                        end
+                    end
                 else
-                    
+                    newops[i] = Operation(
+                        i - 1, name(op), 8, instr, compute, loopdeps, reduceddeps, op_parents, op.ref, reducedc
+                    )
                 end
             else#if isstore(op)
-                lsnew[i] = Operation(
+                newops[i] = Operation(
                     i - 1, name(op), 8, instr, memstore, loopdeps, reduceddeps, op_parents, op.ref, reducedc
                 )
             end
