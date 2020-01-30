@@ -113,6 +113,78 @@ function update_tracked!(∂ls::∂LoopSet, ls::LoopSet)
         end
     end
 end
+
+
+
+
+function add_tracked_compute!()
+    nops = length(newops)
+    nargs = length(op_parents)
+    diffrule = DERIVATIVERULES[InstructionArgs(instr, nargs)]
+    retind = first(diffrule.returns) # this will be the instruction that takes the place of op
+    # Strategy of only allocating if we need to
+    # NODEPENDENCY sits in as a dummy
+    current_reduction_loops = LoopVectorization.NODEPENDENCY
+    @assert length(current_reduction_loops) == 0
+    for s ∈ reduceddeps
+        if s ∈ loopdeps
+            if length(current_reduction_loops) == 0
+                current_reduction_loops = Symbol[ s ]
+            else
+                push!(current_reduction_loops, s)
+            end
+        end
+    end
+    currently_reduced = length(current_reduction_loops) > 0
+    # now, we
+    for j ∈ first(diffrule.sections)
+        instrⱼ = diffrule.instructions[j]
+        instrdepsⱼ = diffrule.dependencies[j]
+        vparentⱼ = Vector{Operation}(undef, length(instrdepsⱼ))
+        for (k,d) ∈ enumerate(instrdepsⱼ)
+            @assert (d != 0) & (d ≥ -nargs)
+            if d < 0 # we index into parents
+                vparentⱼ[k] = op_parents[nargs + 1 + d]
+            elseif d > 0
+                vparentⱼ[k] = newops[nops + d]
+            end
+        end
+        # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
+        if instrdepsⱼ == -nargs:-1
+            loopdepsⱼ = loopdeps
+            reduceddepsⱼ = reduceddeps
+            reducedcⱼ = reducedc
+        else
+            loopdepsⱼ = Symbol[]; reduceddepsⱼ = Symbol[]; reducedcⱼ = Symbol[]
+            if currently_reduced
+            else
+            end
+        end
+        if j == retind
+            newops[j] = Operation(
+                i - 1, name(op), 8, instrⱼ, compute, 
+            )
+        else
+            push!(newops, Operation(
+                length(newops), gensym(:firstpassintermediary), 8, instrⱼ, compute, 
+            ))
+        end
+        # need to see if it is not stored, but required for calculating gradients of tracked vars
+    end
+
+end
+
+function add_compte!()
+    if tracked_ops[i]
+        add_tracked_compute!()
+    else
+        newops[i] = Operation(
+            i - 1, name(op), 8, instr, compute, loopdeps, reduceddeps, op_parents, op.ref, reducedc
+        )
+    end
+
+end
+
 function first_pass!(∂ls::∂LoopSet, lsold::LoopSet)
     lsnew = ∂ls.ls
     newops = operations(lsnew)
@@ -135,43 +207,7 @@ function first_pass!(∂ls::∂LoopSet, lsold::LoopSet)
         else
             op_parents = [newops[identifier(opp)] for opp ∈ parents(op)]
             if iscompute(op)
-                if tracked_ops[i]
-                    nops = length(newops)
-                    nargs = length(op_parents)
-                    diffrule = DERIVATIVERULES[InstructionArgs(instr, nargs)]
-                    retind = first(diffrule.returns) # this will be the instruction that takes the place of op
-                    # now, we
-                    for j ∈ first(diffrule.sections)
-                        instrⱼ = diffrule.instructions[j]
-                        instrdepsⱼ = diffrule.dependencies[j]
-                        vparentⱼ = Vector{Operation}(undef, length(instrdepsⱼ))
-                        for (k,d) ∈ enumerate(instrdepsⱼ)
-                            @assert (d != 0) & (d ≥ -nargs)
-                            if d < 0 # we index into parents
-                                vparentⱼ[k] = op_parents[nargs + 1 + d]
-                            elseif d > 0
-                                vparentⱼ[k] = newops[nops + d]
-                            end
-                        end
-                        # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
-                        if instrdepsⱼ == -nargs:-1
-                        else
-                        end
-                        if j == retind
-                            newops[j] = Operation(
-                                i - 1, name(op), 8, instrⱼ, compute, 
-                            )
-                        else
-                            push!(newops, Operation(
-                                length(newops), gensym(:firstpassintermediary), 8, instrⱼ, compute, 
-                            ))
-                        end
-                    end
-                else
-                    newops[i] = Operation(
-                        i - 1, name(op), 8, instr, compute, loopdeps, reduceddeps, op_parents, op.ref, reducedc
-                    )
-                end
+                add_compte!()
             else#if isstore(op)
                 newops[i] = Operation(
                     i - 1, name(op), 8, instr, memstore, loopdeps, reduceddeps, op_parents, op.ref, reducedc
