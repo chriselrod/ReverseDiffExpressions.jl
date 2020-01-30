@@ -124,18 +124,18 @@ function add_tracked_compute!()
     retind = first(diffrule.returns) # this will be the instruction that takes the place of op
     # Strategy of only allocating if we need to
     # NODEPENDENCY sits in as a dummy
-    current_reduction_loops = LoopVectorization.NODEPENDENCY
-    @assert length(current_reduction_loops) == 0
-    for s ∈ reduceddeps
-        if s ∈ loopdeps
-            if length(current_reduction_loops) == 0
-                current_reduction_loops = Symbol[ s ]
-            else
-                push!(current_reduction_loops, s)
-            end
-        end
-    end
-    currently_reduced = length(current_reduction_loops) > 0
+    # current_reduction_loops = LoopVectorization.NODEPENDENCY
+    # @assert length(current_reduction_loops) == 0
+    # for s ∈ reduceddeps
+        # if s ∈ loopdeps
+            # if length(current_reduction_loops) == 0
+                # current_reduction_loops = Symbol[ s ]
+            # else
+                # push!(current_reduction_loops, s)
+            # end
+        # end
+    # end
+    # currently_reduced = length(current_reduction_loops) > 0
     # now, we
     for j ∈ first(diffrule.sections)
         instrⱼ = diffrule.instructions[j]
@@ -150,14 +150,36 @@ function add_tracked_compute!()
             end
         end
         # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
-        if instrdepsⱼ == -nargs:-1
+        if j == retind || instrdepsⱼ == -nargs:-1
             loopdepsⱼ = loopdeps
             reduceddepsⱼ = reduceddeps
             reducedcⱼ = reducedc
         else
+            # Plan here is to add each dep that shows up in at least one of the parents
             loopdepsⱼ = Symbol[]; reduceddepsⱼ = Symbol[]; reducedcⱼ = Symbol[]
-            if currently_reduced
-            else
+            for d ∈ loopdeps
+                for opp ∈ vparentⱼ
+                    if d ∈ loopdependencies(opp)
+                        push!(loopdepsⱼ, d)
+                        break
+                    end
+                end
+            end
+            for d ∈ reduceddeps
+                for opp ∈ vparentⱼ
+                    if d ∈ reduceddependencies(opp)
+                        push!(reduceddepsⱼ, d)
+                        break
+                    end
+                end
+            end
+            for d ∈ reducedc
+                for opp ∈ vparentⱼ
+                    if d ∈ reducedchildren(opp)
+                        push!(reducedcⱼ, d)
+                        break
+                    end
+                end
             end
         end
         if j == retind
