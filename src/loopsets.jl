@@ -12,7 +12,7 @@ struct ∂LoopSet
     ∂ls::Vector{LoopSet}
     visited_ops::Vector{Bool}
     tracked_ops::Vector{Bool}
-    stored_ops::Vector{Bool}
+    stored_ops::Vector{Int}
     # loads::Vector{Bool}
     # stores::Vector{Bool}
     tracked_vars::Set{Symbol}
@@ -34,7 +34,7 @@ end
 
 function ∂LoopSet(ls::LoopSet, tracked_vars::Set{Symbol})
     nops = length(operations(ls))
-    ∂ls = ∂LoopSet(LoopSet(ls.mod), LoopSet[], fill(false, nops), fill(false, nops), fill(false, nops), tracked_vars, sizehint!(Int[], length(ls.operations)))
+    ∂ls = ∂LoopSet(LoopSet(ls.mod), LoopSet[], fill(false, nops), fill(false, nops), fill(-1, nops), tracked_vars, sizehint!(Int[], length(ls.operations)))
     resize!(∂ls.ls.operations, length(operations(ls)))
     copymeta!(∂ls.ls, ls)
     determine_parents_first_order!(∂ls, ls)
@@ -84,7 +84,8 @@ function determine_stored_computations!(∂ls::∂Loopset, ls::LoopSet)
     for op ∈ operations(ls)
         if isstore(op)
             parent = first(parents(op))
-            stored_ops[identifier(op)] = true
+            stored_ops[identifier(op)] = identifier(op)
+            stored_ops[identifier(parent)] = identifier(op)
         end
     end
 end
@@ -122,21 +123,6 @@ function add_tracked_compute!()
     nargs = length(op_parents)
     diffrule = DERIVATIVERULES[InstructionArgs(instr, nargs)]
     retind = first(diffrule.returns) # this will be the instruction that takes the place of op
-    # Strategy of only allocating if we need to
-    # NODEPENDENCY sits in as a dummy
-    # current_reduction_loops = LoopVectorization.NODEPENDENCY
-    # @assert length(current_reduction_loops) == 0
-    # for s ∈ reduceddeps
-        # if s ∈ loopdeps
-            # if length(current_reduction_loops) == 0
-                # current_reduction_loops = Symbol[ s ]
-            # else
-                # push!(current_reduction_loops, s)
-            # end
-        # end
-    # end
-    # currently_reduced = length(current_reduction_loops) > 0
-    # now, we
     for j ∈ first(diffrule.sections)
         instrⱼ = diffrule.instructions[j]
         instrdepsⱼ = diffrule.dependencies[j]
@@ -192,6 +178,14 @@ function add_tracked_compute!()
             ))
         end
         # need to see if it is not stored, but required for calculating gradients of tracked vars
+        # so we search the diffrule dependencies for j
+        if stored_ops[j] == -1 # indicator meaning not stored
+            for k ∈ first(diffrule.sections[2]):length(diffrule.dependencies)
+                if j ∈ diffrule.dependencies[k]
+                    # now we must cache the results of this operation.
+                end
+            end
+        end
     end
 
 end
