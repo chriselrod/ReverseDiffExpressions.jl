@@ -123,6 +123,8 @@ function add_tracked_compute!()
     nargs = length(op_parents)
     diffrule = DERIVATIVERULES[InstructionArgs(instr, nargs)]
     retind = first(diffrule.returns) # this will be the instruction that takes the place of op
+    # ninserts = 0
+    npushes = 0
     for j ∈ first(diffrule.sections)
         instrⱼ = diffrule.instructions[j]
         instrdepsⱼ = diffrule.dependencies[j]
@@ -131,8 +133,10 @@ function add_tracked_compute!()
             @assert (d != 0) & (d ≥ -nargs)
             if d < 0 # we index into parents
                 vparentⱼ[k] = op_parents[nargs + 1 + d]
-            elseif d > 0
-                vparentⱼ[k] = newops[nops + d]
+            elseif d == retind
+                vparentⱼ[k] = newops[j]
+            else # we don't add to the end of the array when d == retind, so those greater must be decremented
+                vparentⱼ[k] = newops[nops + d - (d > retind)]
             end
         end
         # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
@@ -168,21 +172,27 @@ function add_tracked_compute!()
                 end
             end
         end
-        if j == retind
+        newopid = if j == retind
             newops[j] = Operation(
                 i - 1, name(op), 8, instrⱼ, compute, 
             )
+            j
         else
+            # ninserts += 1
+            # insertloc = nops + ninserts
             push!(newops, Operation(
                 length(newops), gensym(:firstpassintermediary), 8, instrⱼ, compute, 
             ))
+            length(newops)
         end
         # need to see if it is not stored, but required for calculating gradients of tracked vars
         # so we search the diffrule dependencies for j
-        if stored_ops[j] == -1 # indicator meaning not stored
+        if stored_ops[newopid] == -1 # indicator meaning not stored
             for k ∈ first(diffrule.sections[2]):length(diffrule.dependencies)
                 if j ∈ diffrule.dependencies[k]
                     # now we must cache the results of this operation.
+                    push!(newops_to_store, newopid)
+                    break
                 end
             end
         end
