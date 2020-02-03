@@ -10,6 +10,7 @@ using LoopVectorization:
 struct ∂LoopSet
     ls::LoopSet
     ∂ls::LoopSet
+    ∂lschildren::Vector{Vector{Operation}}
     visited_ops::Vector{Bool}
     tracked_ops::Vector{Bool}
     stored_ops::Vector{Int}
@@ -177,23 +178,78 @@ function fill_parents(dro::DiffRuleOperation)
     #     end
     # end
 end
-function determine_dependencies(diffrule::DiffRuleOperation, vparentⱼ::Vector{Operation}, j::Int)
+function determine_dependencies_forward(diffrule::DiffRuleOperation, vparentⱼ::Vector{Operation}, j::Int)
+    instr = instruction(diffrule, j)
+    instrdeps = dependencies(diffrule, j)
+    # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
+    if j == retind || instrdepsⱼ == -nargs:-1
+        loopdepsⱼ = loopdeps
+        reduceddepsⱼ = reduceddeps
+        reducedcⱼ = reducedc
+    else
+        # Plan here is to add each dep that shows up in at least one of the parents
+        vparentⱼ = parents(diffrule)
+        loopdepsⱼ = Symbol[]; reduceddepsⱼ = Symbol[]; reducedcⱼ = Symbol[]
+        for d ∈ loopdeps
+            for opp ∈ vparentⱼ
+                if d ∈ loopdependencies(opp)
+                    push!(loopdepsⱼ, d)
+                    break
+                end
+            end
+        end
+        for d ∈ reduceddeps
+            for opp ∈ vparentⱼ
+                if d ∈ reduceddependencies(opp)
+                    push!(reduceddepsⱼ, d)
+                    break
+                end
+            end
+        end
+        for d ∈ reducedc
+            for opp ∈ vparentⱼ
+                if d ∈ reducedchildren(opp)
+                    push!(reducedcⱼ, d)
+                    break
+                end
+            end
+        end
+    end
+    loopdepsⱼ, reduceddepsⱼ reducedcⱼ
+end
+function determine_dependencies_reverse(diffrule::DiffRuleOperation, vparentⱼ::Vector{Operation}, j::Int)
     instr = instruction(diffrule, j)
     instrdeps = dependencies(diffrule, j)
     # Need to figure out the logic here.
     
     loopdeps, reduceddeps reducedc
 end
-
-function add_section!(
-    ∂ls::∂LoopSet, op::Operation, section::Vector{Int}, referenceops::Vector{Operation}
+function add_section_forward!()
+    
+end
+function add_section_reverse!(
+    ∂ls::∂LoopSet, dro::DiffRuleOperation, op::Operation, section::Vector{Int}, referenceops::Vector{Operation}
 )
     pls = ∂ls.∂ls; ls = ∂ls.ls
+    ops = operations(dro)
+    for i ∈ sectionₛ
+        instr = instruction(dro, i)
+        deps = dependencies(dro, i)
+        vparents = Vector{Operation}(undef, length(deps))
+        for (j,d) ∈ enumerate(deps)
+            d == 0 && continue
+            vparents[j] = dro[d]
+        end
+        loopdeps, reduceddeps, reducedc = determine_dependencies_reverse(dro, vparent, i)
+        #id to be corrected later
+        diffops[i] = Operation(-1, name(op), 8, instr, compute, loopdeps, reduceddeps, vparents, NOTAREFERENCE, reducedc)
+    end
     
 end
 function add_tracked_compute!(∂lss::∂LoopSet, lsold::LoopSet, op::Operation)
     ls = ∂lss.ls
     ∂ls = ∂lss.∂ls
+    ∂ops = ∂ls.∂ops
     newops = operations(ls)
     ∂newops = operations(∂ls)
     # nops = length(newops)
@@ -206,16 +262,12 @@ function add_tracked_compute!(∂lss::∂LoopSet, lsold::LoopSet, op::Operation)
     end
     for (s, sectionₛ) ∈ enumerate(sections(dro))
         # retind = returned_ind(dro, s)
-        ls = s == 1 ? ∂ls.ls : ∂ls.∂ls
-        for i ∈ sectionₛ
-            instr = instruction(dro, i)
-            deps = dependencies(dro, i)
-            vparents
-            loopdeps, reduceddeps, reducedc = determine_dependencies(dro, vparent, i)
-            diffops[i] = Operation(#id to be corrected later
-                -1, name(op), 8, instr, compute, loopdeps, reduceddeps, vparents, NOTAREFERENCE, reducedc
-            )
+        if s == 1
+            add_section_forward!()
+        else
+            add_section_reverse!()
         end
+        ls = s == 1 ? ∂ls.ls : ∂ls.∂ls
         # retind must be handled here, because section could have been skipped
     end
     
