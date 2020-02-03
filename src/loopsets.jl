@@ -9,7 +9,7 @@ using LoopVectorization:
 
 struct ∂LoopSet
     ls::LoopSet
-    ∂ls::Vector{LoopSet}
+    ∂ls::LoopSet
     visited_ops::Vector{Bool}
     tracked_ops::Vector{Bool}
     stored_ops::Vector{Int}
@@ -17,6 +17,8 @@ struct ∂LoopSet
     # stores::Vector{Bool}
     tracked_vars::Set{Symbol}
     opsparentsfirst::Vector{Int}
+    ∂ops::Vector{Operation}
+    dependingonundefined::Vector{Vector{Tuple{Int,Int}}}
 end
 
 function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
@@ -31,10 +33,18 @@ function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
     append!(lsdest.includedarrays, lssrc.includedarrays)
     nothing
 end
-
+function ∂LoopSet(mod, nops, tracked_vars::Set{Symbol})
+    ∂LoopSet(
+        LoopSet(mod), LoopSet(mod),
+        fill(false, nops), fill(false, nops), fill(-1, nops),
+        tracked_vars, sizehint!(Int[], nops),
+        Vector{Operation}(undef, nops),
+        [Tuple{Int,Int}[] for _ ∈ 1:nops]
+    )
+end
 function ∂LoopSet(ls::LoopSet, tracked_vars::Set{Symbol})
     nops = length(operations(ls))
-    ∂ls = ∂LoopSet(LoopSet(ls.mod), LoopSet[], fill(false, nops), fill(false, nops), fill(-1, nops), tracked_vars, sizehint!(Int[], length(ls.operations)))
+    ∂ls = ∂LoopSet(ls.mod, nops, tracked_vars)
     resize!(∂ls.ls.operations, length(operations(ls)))
     copymeta!(∂ls.ls, ls)
     determine_parents_first_order!(∂ls, ls)
@@ -116,70 +126,142 @@ function update_tracked!(∂ls::∂LoopSet, ls::LoopSet)
 end
 
 
+struct DiffRuleOperation
+    diffrule::DiffRule
+    operations::OffsetArray{Operation,1}
+end
+function DiffRuleOperation(dr::DiffRule, nparents = num_parents(dr))
+    ops = OffsetArray{Operation}(undef, -nparents:last(last(diffrule.sections)))
+    DiffRuleOperation(
+        dr, ops
+    )
+end
 
+function DiffRuleOperation(op::Operation)
+    nargs = length(parents(op))
+    dr = DERIVATIVERULES[InstructionArgs(instruction(op), nargs)]
+    DiffRuleOperation(dr, nargs)
+end
+function LoopVectorization.parents(dro::DiffRuleOperation)
+    nparents = num_parents(dro.diffrule)
+    view(dro.operations[-nparents:-1])
+end
+LoopVectorization.instruction(dro::DiffRuleOperation, i::Int) = instruction(dro.diffrule, i)
+LoopVectorization.operations(dro::DiffRuleOperation) = dro.operations
+function returned_ind(dro::DiffRuleOperation, i::Int)
+    i == 2 && return typemin(Int)
+    dro.diffrule.returns[i - (i > 2)]
+end
+returned_inds(dro::DiffRuleOperation) = dro.diffrule.returns
+section(dro::DiffRuleOperation, i::Int) = dro.diffrule.sections[i]
+sections(dro::DiffRuleOperation) = dro.diffrule.sections
+dependencies(dro::DiffRuleOperation) = dro.diffrule.dependencies
+dependencies(dro::DiffRuleOperation, i::Int) = dro.diffrule.dependencies[i]
 
-function add_tracked_compute!()
-    nops = length(newops)
-    nargs = length(op_parents)
-    diffrule = DERIVATIVERULES[InstructionArgs(instr, nargs)]
+function fill_parents(dro::DiffRuleOperation)
+    vparentⱼ = Vector{Operation}(undef, num_parents(dro.diffrule))
+    instrdepsⱼ = dependencies(diffrule, j)
+    ops = operations(dro)
+    for (k,d) ∈ enumerate(instrdepsⱼ)
+        vparentⱼ[k] = ops[d]
+    end
+    vparentⱼ
+    # for (k,d) ∈ enumerate(instrdepsⱼ)
+    #     @assert (d != 0) & (d ≥ -nargs)
+    #     if d < 0 # we index into parents
+    #         vparentⱼ[k] = op_parents[nargs + 1 + d]
+    #     elseif d == retind
+    #         vparentⱼ[k] = newops[j]
+    #     else # we don't add to the end of the array when d == retind, so those greater must be decremented
+    #         vparentⱼ[k] = newops[nops + d - (d > retind)]
+    #     end
+    # end
+end
+function determine_dependencies(diffrule::DiffRuleOperation, vparentⱼ::Vector{Operation}, j::Int)
+    instr = instruction(diffrule, j)
+    instrdeps = dependencies(diffrule, j)
+    # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
+    if j == retind || instrdepsⱼ == -nargs:-1
+        loopdepsⱼ = loopdeps
+        reduceddepsⱼ = reduceddeps
+        reducedcⱼ = reducedc
+    else
+        # Plan here is to add each dep that shows up in at least one of the parents
+        vparentⱼ = parents(diffrule)
+        loopdepsⱼ = Symbol[]; reduceddepsⱼ = Symbol[]; reducedcⱼ = Symbol[]
+        for d ∈ loopdeps
+            for opp ∈ vparentⱼ
+                if d ∈ loopdependencies(opp)
+                    push!(loopdepsⱼ, d)
+                    break
+                end
+            end
+        end
+        for d ∈ reduceddeps
+            for opp ∈ vparentⱼ
+                if d ∈ reduceddependencies(opp)
+                    push!(reduceddepsⱼ, d)
+                    break
+                end
+            end
+        end
+        for d ∈ reducedc
+            for opp ∈ vparentⱼ
+                if d ∈ reducedchildren(opp)
+                    push!(reducedcⱼ, d)
+                    break
+                end
+            end
+        end
+    end
+    loopdepsⱼ, reduceddepsⱼ reducedcⱼ
+end
+
+function add_section!(
+    ∂ls::∂LoopSet, op::Operation, section::Vector{Int}, referenceops::Vector{Operation}
+)
+    pls = ∂ls.∂ls; ls = ∂ls.ls
+    
+end
+function add_tracked_compute!(∂lss::∂LoopSet, lsold::LoopSet, op::Operation)
+    ls = ∂lss.ls
+    ∂ls = ∂lss.∂ls
+    newops = operations(ls)
+    ∂newops = operations(∂ls)
+    # nops = length(newops)
+    dro = DiffRuleOperation(op)
+    diffops = operations(dro)
+    i = firstindex(diffops)
+    for opp ∈ parents(op)
+        diffops[i] = newops[identifier(opp)]
+        i += 1
+    end
+    for (s, sectionₛ) ∈ enumerate(sections(dro))
+        # retind = returned_ind(dro, s)
+        ls = s == 1 ? ∂ls.ls : ∂ls.∂ls
+        for i ∈ sectionₛ
+            instr = instruction(dro, i)
+            deps = dependencies(dro, i)
+            vparents
+            loopdeps, reduceddeps, reducedc = determine_dependencies(dro, vparent, i)
+            diffops[i] = Operation(#id to be corrected later
+                -1, name(op), 8, instr, compute, loopdeps, reduceddeps, vparents, NOTAREFERENCE, reducedc
+            )
+        end
+        # retind must be handled here, because section could have been skipped
+    end
+    
+    retinds = returns(dro)
+    
     retind = first(diffrule.returns) # this will be the instruction that takes the place of op
-    # ninserts = 0
-    npushes = 0
+    
     for j ∈ first(diffrule.sections)
-        instrⱼ = diffrule.instructions[j]
-        instrdepsⱼ = diffrule.dependencies[j]
-        vparentⱼ = Vector{Operation}(undef, length(instrdepsⱼ))
-        for (k,d) ∈ enumerate(instrdepsⱼ)
-            @assert (d != 0) & (d ≥ -nargs)
-            if d < 0 # we index into parents
-                vparentⱼ[k] = op_parents[nargs + 1 + d]
-            elseif d == retind
-                vparentⱼ[k] = newops[j]
-            else # we don't add to the end of the array when d == retind, so those greater must be decremented
-                vparentⱼ[k] = newops[nops + d - (d > retind)]
-            end
-        end
-        # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
-        if j == retind || instrdepsⱼ == -nargs:-1
-            loopdepsⱼ = loopdeps
-            reduceddepsⱼ = reduceddeps
-            reducedcⱼ = reducedc
-        else
-            # Plan here is to add each dep that shows up in at least one of the parents
-            loopdepsⱼ = Symbol[]; reduceddepsⱼ = Symbol[]; reducedcⱼ = Symbol[]
-            for d ∈ loopdeps
-                for opp ∈ vparentⱼ
-                    if d ∈ loopdependencies(opp)
-                        push!(loopdepsⱼ, d)
-                        break
-                    end
-                end
-            end
-            for d ∈ reduceddeps
-                for opp ∈ vparentⱼ
-                    if d ∈ reduceddependencies(opp)
-                        push!(reduceddepsⱼ, d)
-                        break
-                    end
-                end
-            end
-            for d ∈ reducedc
-                for opp ∈ vparentⱼ
-                    if d ∈ reducedchildren(opp)
-                        push!(reducedcⱼ, d)
-                        break
-                    end
-                end
-            end
-        end
         newopid = if j == retind
             newops[j] = Operation(
                 i - 1, name(op), 8, instrⱼ, compute, 
             )
             j
         else
-            # ninserts += 1
-            # insertloc = nops + ninserts
             push!(newops, Operation(
                 length(newops), gensym(:firstpassintermediary), 8, instrⱼ, compute, 
             ))
@@ -188,6 +270,9 @@ function add_tracked_compute!()
         # need to see if it is not stored, but required for calculating gradients of tracked vars
         # so we search the diffrule dependencies for j
         if stored_ops[newopid] == -1 # indicator meaning not stored
+            for section ∈ @view(diffrule.sections[2:end])
+                
+            end
             for k ∈ first(diffrule.sections[2]):length(diffrule.dependencies)
                 if j ∈ diffrule.dependencies[k]
                     # now we must cache the results of this operation.
@@ -200,7 +285,7 @@ function add_tracked_compute!()
 
 end
 
-function add_compte!()
+function add_compute!()
     if tracked_ops[i]
         add_tracked_compute!()
     else
@@ -208,38 +293,39 @@ function add_compte!()
             i - 1, name(op), 8, instr, compute, loopdeps, reduceddeps, op_parents, op.ref, reducedc
         )
     end
-
+end
+function add_operation!(∂ls::∂LoopSet, ops::Vector{Operation}, i::Int)
+    op = ops[i]
+    newops = operations(lsnew)
+    instr = instruction(op)
+    loopdeps = loopdependencies(op); reduceddeps = reduceddependencies(op); reducedc = reducedchildren(op);
+    if isconstant(op)
+        newops[i] = Operation(
+            i - 1, name(op), 8, instr, constant, loopdeps, reduceddeps, NOPARENTS, NOTAREFERENCE, reducedc
+        )
+    elseif isload(op)
+        newops[i] = Operation(
+            i - 1, name(op), 8, instr, memload, loopdeps, reduceddeps, NOPARENTS, op.ref, reducedc
+        )
+    elseif iscompute(op)
+        add_compte!()
+    else#if isstore(op)
+        op_parents = [newops[identifier(opp)] for opp ∈ parents(op)]
+        newops[i] = Operation(
+            i - 1, name(op), 8, instr, memstore, loopdeps, reduceddeps, op_parents, op.ref, reducedc
+        )
+    end
+    
 end
 
 function first_pass!(∂ls::∂LoopSet, lsold::LoopSet)
     lsnew = ∂ls.ls
-    newops = operations(lsnew)
     ops = operations(lsold)
     oldnewaliases = Vector{Int}(undef, length(ops)) # index is old identifier, value is new identifier.
     tracked_ops = ∂ls.tracked_ops
     stored_ops = ∂ls.stored_ops
     for i ∈ ls.opsparentsfirst
-        op = ops[i]
-        instr = instruction(op)
-        loopdeps = loopdependencies(op); reduceddeps = reduceddependencies(op); reducedc = reducedchildren(op);
-        if isconstant(op)
-            newops[i] = Operation(
-                i - 1, name(op), 8, instr, constant, loopdeps, reduceddeps, NOPARENTS, NOTAREFERENCE, reducedc
-            )
-        elseif isload(op)
-            newops[i] = Operation(
-                i - 1, name(op), 8, instr, memload, loopdeps, reduceddeps, NOPARENTS, op.ref, reducedc
-            )
-        else
-            op_parents = [newops[identifier(opp)] for opp ∈ parents(op)]
-            if iscompute(op)
-                add_compte!()
-            else#if isstore(op)
-                newops[i] = Operation(
-                    i - 1, name(op), 8, instr, memstore, loopdeps, reduceddeps, op_parents, op.ref, reducedc
-                )
-            end
-        end
+        add_operation!(∂ls, ops, i)
     end
 end
 
