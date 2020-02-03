@@ -17,6 +17,7 @@ struct ∂LoopSet
     # loads::Vector{Bool}
     # stores::Vector{Bool}
     tracked_vars::Set{Symbol}
+    initialized_vars::Set{Symbol}
     opsparentsfirst::Vector{Int}
     ∂ops::Vector{Operation}
     dependingonundefined::Vector{Vector{Tuple{Int,Int}}}
@@ -228,23 +229,49 @@ function add_section_forward!()
     
 end
 function add_section_reverse!(
-    ∂ls::∂LoopSet, dro::DiffRuleOperation, op::Operation, section::Vector{Int}, referenceops::Vector{Operation}
+    ∂ls::∂LoopSet, dro::DiffRuleOperation, op::Operation, s::Int, referenceops::Vector{Operation}
 )
     pls = ∂ls.∂ls; ls = ∂ls.ls
     ops = operations(dro)
+    diffops = operations(dro)
+    sectionₛ = section(dro, s)
+    ∂ops = ∂ls.∂ops
+    if s > 2
+        # retind will be assigned to ∂parent₍ₛ₋₁₎
+        # can find it in ∂ops[identifier(parent₍ₛ₋₁₎)]
+        retind = returned_ind(dro, s)
+        # either retind will be assigned to ∂ops[identifier(parent₍ₛ₋₁₎)],
+        # or it will be promoted to MAKEUPDATING version, or a vadd used to combine.
+        parentid = s - 3 + firstindex(ops) # s == 3 corresponds to first parent, thus use firstindex into ops
+        assigndeps = loopdependencies(∂ops[identifier(ops[parentid])])
+    else#if s == 2 # then we are not defining an op̄
+        retind = typemin(Int)
+        assigndeps = NODEPENDENCY 
+    end
     for i ∈ sectionₛ
         instr = instruction(dro, i)
         deps = dependencies(dro, i)
-        vparents = Vector{Operation}(undef, length(deps))
-        for (j,d) ∈ enumerate(deps)
-            d == 0 && continue
-            vparents[j] = dro[d]
+        if (instr == Instruction(:adjoint) || instr == Instruction(:transpose) || instr == Instruction(:identity))
+            @assert length(deps) == 1
+            diffops[i] = diffops[first(deps)]
+        else
+            vparents = Vector{Operation}(undef, length(deps))
+            for (j,d) ∈ enumerate(deps)
+                d == 0 && continue
+                # ops[d] for d != 0 should be assigned; if not will throw error
+                vparents[j] = ops[d] 
+            end
+            loopdeps, reduceddeps, reducedc = determine_dependencies_reverse(dro, vparent, i, retind, assigndeps)
+            #id to be corrected later
+            diffops[i] = Operation(i-1, name(op), 8, instr, compute, loopdeps, reduceddeps, vparents, NOTAREFERENCE, reducedc)
         end
-        loopdeps, reduceddeps, reducedc = determine_dependencies_reverse(dro, vparent, i)
-        #id to be corrected later
-        diffops[i] = Operation(-1, name(op), 8, instr, compute, loopdeps, reduceddeps, vparents, NOTAREFERENCE, reducedc)
     end
-    
+    if s > 2
+        parentid = s - 3 + firstindex(ops) # s == 3 corresponds to first parent, thus use firstindex into ops
+        child = ∂ops[identifier(ops[parentid])]
+        # which ind of this child's parent's is the newly assigned Operation?
+        
+    end
 end
 function add_tracked_compute!(∂lss::∂LoopSet, lsold::LoopSet, op::Operation)
     ls = ∂lss.ls
@@ -254,7 +281,7 @@ function add_tracked_compute!(∂lss::∂LoopSet, lsold::LoopSet, op::Operation)
     ∂newops = operations(∂ls)
     # nops = length(newops)
     dro = DiffRuleOperation(op)
-    diffops = operations(dro)
+    diffops = operations(dro) # ops will be added with ids w/ respect to position in diffops; later these will be corrected to position w/in operations(∂ls)
     i = firstindex(diffops)
     for opp ∈ parents(op)
         diffops[i] = newops[identifier(opp)]
@@ -316,7 +343,10 @@ function add_compute!()
 end
 function add_operation!(∂ls::∂LoopSet, ops::Vector{Operation}, i::Int)
     op = ops[i]
+    lsnew = operations(∂ls.ls)
+    ∂lsnew = operations(∂ls.∂ls)
     newops = operations(lsnew)
+    ∂newops = ∂ls.∂ops#operations(∂lsnew)
     instr = instruction(op)
     loopdeps = loopdependencies(op); reduceddeps = reduceddependencies(op); reducedc = reducedchildren(op);
     if isconstant(op)
@@ -327,6 +357,15 @@ function add_operation!(∂ls::∂LoopSet, ops::Vector{Operation}, i::Int)
         newops[i] = Operation(
             i - 1, name(op), 8, instr, memload, loopdeps, reduceddeps, NOPARENTS, op.ref, reducedc
         )
+        if istracked(∂ls, op)
+            adjop = adj(name(op))
+            ∂ref = ArrayReferenceMeta( ArrayReference( adjop, getindices(op) ), op.ref.loopedindex )
+            ∂op = Operation(
+                - 1, adjop, 8, :setindex!, memstore, loopdeps, NODEPENDENCY, Operation[], ∂ref, NODEPENDENCY
+            )
+            # backlogged store; wait until it has a parent to add
+            ∂newops[i] = ∂op
+        end
     elseif iscompute(op)
         add_compte!()
     else#if isstore(op)
@@ -334,6 +373,16 @@ function add_operation!(∂ls::∂LoopSet, ops::Vector{Operation}, i::Int)
         newops[i] = Operation(
             i - 1, name(op), 8, instr, memstore, loopdeps, reduceddeps, op_parents, op.ref, reducedc
         )
+        if istracked(∂ls, op)
+            adjop = adj(name(op))
+            
+            ∂ref = ArrayReferenceMeta( ArrayReference( adjop, getindices(op) ), op.ref.loopedindex )
+            ∂op = Operation(
+                - 1, adjop, 8, :getindex, memload, loopdeps, NODEPENDENCY, Operation[], ∂ref, NODEPENDENCY
+            )
+            # backlogged store; wait until it has a parent to add
+            ∂newops[i] = ∂op
+        end
     end
     
 end
