@@ -180,41 +180,9 @@ end
 function determine_dependencies(diffrule::DiffRuleOperation, vparentⱼ::Vector{Operation}, j::Int)
     instr = instruction(diffrule, j)
     instrdeps = dependencies(diffrule, j)
-    # calc loopdeps and reduced deps from parents. Special case the situation where op_parents are parents
-    if j == retind || instrdepsⱼ == -nargs:-1
-        loopdepsⱼ = loopdeps
-        reduceddepsⱼ = reduceddeps
-        reducedcⱼ = reducedc
-    else
-        # Plan here is to add each dep that shows up in at least one of the parents
-        vparentⱼ = parents(diffrule)
-        loopdepsⱼ = Symbol[]; reduceddepsⱼ = Symbol[]; reducedcⱼ = Symbol[]
-        for d ∈ loopdeps
-            for opp ∈ vparentⱼ
-                if d ∈ loopdependencies(opp)
-                    push!(loopdepsⱼ, d)
-                    break
-                end
-            end
-        end
-        for d ∈ reduceddeps
-            for opp ∈ vparentⱼ
-                if d ∈ reduceddependencies(opp)
-                    push!(reduceddepsⱼ, d)
-                    break
-                end
-            end
-        end
-        for d ∈ reducedc
-            for opp ∈ vparentⱼ
-                if d ∈ reducedchildren(opp)
-                    push!(reducedcⱼ, d)
-                    break
-                end
-            end
-        end
-    end
-    loopdepsⱼ, reduceddepsⱼ reducedcⱼ
+    # Need to figure out the logic here.
+    
+    loopdeps, reduceddeps reducedc
 end
 
 function add_section!(
