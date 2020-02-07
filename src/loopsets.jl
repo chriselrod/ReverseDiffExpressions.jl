@@ -7,6 +7,39 @@ using LoopVectorization:
     loopdependencies, refname, name, lower, parents,
     Operation, add_op!
 
+struct DiffRuleOperation
+    diffrule::DiffRule
+    operations::OffsetArray{Operation,1}
+end
+function DiffRuleOperation(dr::DiffRule, nparents = num_parents(dr))
+    ops = OffsetArray{Operation}(undef, -nparents:last(last(diffrule.sections)))
+    DiffRuleOperation(
+        dr, ops
+    )
+end
+
+function DiffRuleOperation(op::Operation)
+    nargs = length(parents(op))
+    dr = DERIVATIVERULES[InstructionArgs(instruction(op), nargs)]
+    DiffRuleOperation(dr, nargs)
+end
+function LoopVectorization.parents(dro::DiffRuleOperation)
+    nparents = num_parents(dro.diffrule)
+    view(dro.operations[-nparents:-1])
+end
+LoopVectorization.instruction(dro::DiffRuleOperation, i::Int) = instruction(dro.diffrule, i)
+LoopVectorization.operations(dro::DiffRuleOperation) = dro.operations
+function returned_ind(dro::DiffRuleOperation, i::Int)
+    i == 2 && return typemin(Int)
+    dro.diffrule.returns[i - (i > 2)]
+end
+returned_inds(dro::DiffRuleOperation) = dro.diffrule.returns
+section(dro::DiffRuleOperation, i::Int) = dro.diffrule.sections[i]
+sections(dro::DiffRuleOperation) = dro.diffrule.sections
+dependencies(dro::DiffRuleOperation) = dro.diffrule.dependencies
+dependencies(dro::DiffRuleOperation, i::Int) = dro.diffrule.dependencies[i]
+
+
 struct ∂LoopSet
     ls::LoopSet
     ∂ls::LoopSet
@@ -20,7 +53,7 @@ struct ∂LoopSet
     initialized_vars::Set{Symbol}
     opsparentsfirst::Vector{Int}
     ∂ops::Vector{Operation}
-    dependingonundefined::Vector{Vector{Tuple{Int,Int}}}
+    diffops::Vector{DiffRuleOperation}
 end
 
 function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
@@ -128,37 +161,6 @@ function update_tracked!(∂ls::∂LoopSet, ls::LoopSet)
 end
 
 
-struct DiffRuleOperation
-    diffrule::DiffRule
-    operations::OffsetArray{Operation,1}
-end
-function DiffRuleOperation(dr::DiffRule, nparents = num_parents(dr))
-    ops = OffsetArray{Operation}(undef, -nparents:last(last(diffrule.sections)))
-    DiffRuleOperation(
-        dr, ops
-    )
-end
-
-function DiffRuleOperation(op::Operation)
-    nargs = length(parents(op))
-    dr = DERIVATIVERULES[InstructionArgs(instruction(op), nargs)]
-    DiffRuleOperation(dr, nargs)
-end
-function LoopVectorization.parents(dro::DiffRuleOperation)
-    nparents = num_parents(dro.diffrule)
-    view(dro.operations[-nparents:-1])
-end
-LoopVectorization.instruction(dro::DiffRuleOperation, i::Int) = instruction(dro.diffrule, i)
-LoopVectorization.operations(dro::DiffRuleOperation) = dro.operations
-function returned_ind(dro::DiffRuleOperation, i::Int)
-    i == 2 && return typemin(Int)
-    dro.diffrule.returns[i - (i > 2)]
-end
-returned_inds(dro::DiffRuleOperation) = dro.diffrule.returns
-section(dro::DiffRuleOperation, i::Int) = dro.diffrule.sections[i]
-sections(dro::DiffRuleOperation) = dro.diffrule.sections
-dependencies(dro::DiffRuleOperation) = dro.diffrule.dependencies
-dependencies(dro::DiffRuleOperation, i::Int) = dro.diffrule.dependencies[i]
 
 function fill_parents(dro::DiffRuleOperation)
     vparentⱼ = Vector{Operation}(undef, num_parents(dro.diffrule))
