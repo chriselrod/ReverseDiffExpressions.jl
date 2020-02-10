@@ -16,11 +16,11 @@ struct ∂LoopSet
     tracked_ops::Vector{Bool}
     visited_ops::Vector{Bool}
     fops::Vector{Operation}
-    rops::Vector{Vector{Operation}}
+    ropsargs::Vector{Vector{Operation}}
     diffops::Vector{DiffRuleOperation}
     stored_ops::Vector{Int}
     opsparentsfirst::Vector{Int}
-    
+    vartracker::VariableTracker
     
     ∂lschildren::Vector{Vector{Operation}}
     tracked_vars::Set{Symbol}

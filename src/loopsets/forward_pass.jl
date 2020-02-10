@@ -16,8 +16,13 @@ function add_forward_operation!(∂ls::∂LoopSet, i::Int)
             i - 1, name(op), 8, instr, constant, loopdependencies(op), reduceddependencies(op), NOPARENTS, NOTAREFERENCE, reducedchildren(op)
         )
     elseif isload(op)
+        loadparents = if length(parents(op)) == 0
+            NOPARENTS
+        else
+            [newops[identifier(opp)] for opp ∈ parents(op)]
+        end
         newops[i] = Operation(
-            i - 1, name(op), 8, instr, memload, loopdependencies(op), reduceddependencies(op), NOPARENTS, op.ref, reducedchildren(op)
+            i - 1, name(op), 8, instr, memload, loopdependencies(op), reduceddependencies(op), loadparents, op.ref, reducedchildren(op)
         )
     elseif iscompute(op)
         add_compute!(∂ls, i)
@@ -29,8 +34,19 @@ function add_forward_operation!(∂ls::∂LoopSet, i::Int)
     end
 end
 
+function add_compute_untracked!(∂ls::∂LoopSet, i::Int)
+    @unpack fls, lsold = ∂ls
+    opold = operations(lsold)[i]
+    newops = operations(fls)
+    vparents [newops[identifier(opp)] for opp ∈ parents(opold)]
+    newops[i] = Operation(
+        i - 1, name(opold), 8, instruction(opold), compute, loopdependencies(opold), reduceddependencies(oldold), vparents, NOTAREFERENCE, reducedchildren(opold)
+    )
+    nothing
+end
 function add_compute!(∂ls::∂LoopSet, i::Int)
-    @unpack fls, lsold, diffops = ∂ls
+    @unpack fls, lsold, diffops, tracked_ops = ∂ls
+    tracked_ops[i] || add_compute_untracked!(∂ls, i)
     oldop = operations(lsold)[i]
     newops = operations(fls)
     
@@ -46,16 +62,17 @@ function add_compute!(∂ls::∂LoopSet, i::Int)
 
         loopdeps, reduceddeps, reducedc = determine_dependencies_forward(oldop, dro, j)
         op = Operation(
-                j - 1, name(op), 8, instrⱼ, compute, loopdeps, reduceddeps, parentsⱼ, NOTAREFERENCE, reducedc
-            )
+            length(newops), name(op), 8, instrⱼ, compute, loopdeps, reduceddeps, parentsⱼ, NOTAREFERENCE, reducedc
+        )
         if j == retind
-            newops[j] = op
+            op.identifier = identifier(oldop)
+            newops[identifier(oldop)] = op
         else
-            op.identifier = length(newops)
             push!(newops, op)
         end
         drops[j] = op
     end
+    nothing
 end
 function combinedeps!(f, totalloopdeps::AbstractVector{T}, opdeps, drops) where {T}
     individualloopdeps = T[]
