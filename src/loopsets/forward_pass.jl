@@ -45,15 +45,16 @@ function add_compute!(∂ls::∂LoopSet, i::Int)
         parentsⱼ = drops[depsⱼ]
 
         loopdeps, reduceddeps, reducedc = determine_dependencies_forward(oldop, dro, j)
-        if j == retind
-            newops[j] = Operation(
+        op = Operation(
                 j - 1, name(op), 8, instrⱼ, compute, loopdeps, reduceddeps, parentsⱼ, NOTAREFERENCE, reducedc
             )
+        if j == retind
+            newops[j] = op
         else
-            push!(newops, Operation(
-                length(newops), name(op), 8, instrⱼ, compute, loopdeps, reduceddeps, parentsⱼ, NOTAREFERENCE, reducedc
-            ))
+            op.identifier = length(newops)
+            push!(newops, op)
         end
+        drops[j] = op
     end
 end
 function combinedeps!(f, totalloopdeps::AbstractVector{T}, opdeps, drops) where {T}
