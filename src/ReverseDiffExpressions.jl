@@ -1,6 +1,6 @@
 module ReverseDiffExpressions
 
-using VectorizationBase, StackPointers, SIMDPirates, DiffRules, LinearAlgebra, PaddedMatrices, StructuredMatrices, ProbabilityDistributions
+using VectorizationBase, StackPointers, SIMDPirates, DiffRules, LinearAlgebra, PaddedMatrices, StructuredMatrices, ProbabilityDistributions, Parameters
 
 using PaddedMatrices:
     AbstractFixedSizeVector, AbstractMutableFixedSizeVector, UninitializedVector,
