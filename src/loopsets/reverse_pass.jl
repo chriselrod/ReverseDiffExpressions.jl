@@ -114,6 +114,24 @@ function get_adj_input_op_noreduct!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Opera
     end
     dro[0] = rop₁
 end
+
+
+function reductzero!(∂ls::∂LoopSet, op)
+    instr = instruction(op)
+    if instr.instr ∉ (:vmul, :*, :evmul)
+        return :zero
+    end
+    @assert length(parents(op)) == 2
+    vparents = parents(op)
+    parent1 = vparents[1]
+    parent2 = vparents[2]
+    if isconstant(parent1)
+        
+    elseif isconstant(parent2)
+    end
+    :zero
+end
+
 # This method means that we have a reduction.
 # We must determine which variables are the reductions, and update parents accordingly
 # If a parent performing the reduction is in the `c = a * b` family, we should swap `∂a` defintion of `b` with `c / a`.
@@ -141,7 +159,7 @@ function get_adj_input_op_reduct!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
         # [ ] 2. Create a reduction zero initializer
         # [ ] 3. Create a reduction finalizer (i.e., reduced_/reduce_to)
         # [ ] 4. If reductzero is :one, define derivative as c / a
-        
+        zeroinstr = reductzero(ropⱼ)
         reductinit = add_constant!(rls, gensym(:reductzero), loopdeps, name(ropⱼ), 8, :numericconstant)
         reductinit.reduced_children = reducedc
         
@@ -152,16 +170,6 @@ function get_adj_input_op_reduct!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
     op = Operation(length(operations(rls)), gensym(:zero), 8, ldrt, )
 
     push!(rls.preamble_zeros, (length(operations(rls)), LoopVectorization.IntOrFloat))
-    dro = diffops[i]
-    rop₁ = first(ropsargsᵢ) # Throws boundserror if length 0
-    for j ∈ 2:length(ropsargsᵢ)
-        ropⱼ = ropsargsᵢ[j]
-        # rop₁ = Operation(
-        #     length(operations(rls)), gensym(:combineadjoints), 8, :vadd, compute, loopdependencies(rop₁), reduceddependencies(ropⱼ), [rop₁, ropⱼ], NOTAREFERENCE, NODEPENDENCY
-        # )
-        push!(operations(rls), rop₁)
-    end
-    dro[0] = rop₁
 
     # We've reduced all the reduction variables, so no we use the noreduct version.
     get_adj_input_op_noreduct!(∂ls, ropsargsᵢ, i)
