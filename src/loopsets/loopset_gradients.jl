@@ -3,11 +3,18 @@ module LoopSetDerivatives
 
 using ReverseDiffExpressionsBase
 using LoopVectorization:
-    LoopSet, operations, isload, iscompute, isstore,
-    loopdependencies, refname, name, lower, parents,
-    Operation, add_op!
+    LoopSet, operations, isload, iscompute, isstore, isconstant,
+    constant, memload, compute, memstore,
+    loopdependencies, reduceddependencies, reducedchildren,
+    refname, name, lower, parents,
+    Operation, add_op!, ArrayReferenceMeta,
+    
 
 include("diffrule_operation.jl")
+
+# struct TemporarAyrrayToAlloc
+    # description::ArrayReferenceMeta
+# end
 
 struct ∂LoopSet
     fls::LoopSet
@@ -21,6 +28,7 @@ struct ∂LoopSet
     stored_ops::Vector{Int}
     opsparentsfirst::Vector{Int}
     vartracker::VariableTracker
+    temparrays::Vector{ArrayReferenceMeta}
     
     ∂lschildren::Vector{Vector{Operation}}
     tracked_vars::Set{Symbol}
@@ -49,7 +57,8 @@ function ∂LoopSet(lsold::LoopSet)
         [Operation[] for _ ∈ 1:nops],
         # sizehint!(DiffRuleOperation[], nops),
         Vector{DiffRuleOperation}(undef, nops),
-        fill(-1, nops), sizehint!(Int[], nops)
+        fill(-1, nops), sizehint!(Int[], nops),
+        ArrayReferenceMeta[]
     )
 end
 function ∂LoopSet(ls::LoopSet, tracked_vars::Set{Symbol})
