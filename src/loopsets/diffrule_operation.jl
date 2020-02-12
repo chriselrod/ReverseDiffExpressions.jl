@@ -1,3 +1,4 @@
+
 struct DiffRuleOperation
     diffrule::DiffRule
     operations::OffsetArray{Operation,1}

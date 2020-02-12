@@ -38,7 +38,7 @@ function add_compute_untracked!(∂ls::∂LoopSet, i::Int)
     @unpack fls, lsold = ∂ls
     opold = operations(lsold)[i]
     newops = operations(fls)
-    vparents [newops[identifier(opp)] for opp ∈ parents(opold)]
+    vparents = [newops[identifier(opp)] for opp ∈ parents(opold)]
     newops[i] = Operation(
         i - 1, name(opold), 8, instruction(opold), compute, loopdependencies(opold), reduceddependencies(oldold), vparents, NOTAREFERENCE, reducedchildren(opold)
     )
@@ -107,6 +107,6 @@ function determine_dependencies_forward(oldop, dro, j)
     reduceddepsⱼ = combineddeps(reduceddependencies, reduceddeps, instrdepsⱼ, drops)
     reducedcⱼ = combineddeps(reducedchildren, reducedc, instrdepsⱼ, drops)
     
-    loopdepsⱼ, reduceddepsⱼ reducedcⱼ
+    loopdepsⱼ, reduceddepsⱼ, reducedcⱼ
 end
 
