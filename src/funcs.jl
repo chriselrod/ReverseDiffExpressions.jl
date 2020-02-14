@@ -1,10 +1,11 @@
 
 mutable struct Func
     instr::Instruction
-    output::Variable
-    vparents::Vector{Variable}
+    output::Int} # Should support unpacking of returned objecs, whether homogonous arrays or heterogenous tuples.
+    vparents::Vector{Int} # should these be Vector{vparent}, or Ints to ids ?
+    unconstrainapi::Bool
     probdistapi::Bool
-    lsid::Int#index into Model's ::Vector{LoopSet}; 0 indicates no ls
+    loopsetid::Int#index into Model's ::Vector{LoopSet}; 0 indicates no ls
     function Func()
         new()
     end

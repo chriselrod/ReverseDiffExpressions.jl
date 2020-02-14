@@ -8,6 +8,8 @@
 mutable struct Variable
     varid::Int
     name::Symbol
+    parentfunc::Int#id of Func creating it.
+    useids::Vector{Int}#ids of Funcs that use it.
     # dims::Dimensions
     tracked::Bool
     initialized::Bool
