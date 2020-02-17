@@ -2,14 +2,15 @@
 struct Func
     funcid::Int
     instr::Instruction
-    output::Vector{Int} # Should support unpacking of returned objecs, whether homogonous arrays or heterogenous tuples.
+    output::Ref{Int} # Should support unpacking of returned objecs, whether homogonous arrays or heterogenous tuples.
     vparents::Vector{Int} # should these be Vector{vparent}, or Ints to ids ?
     unconstrainapi::Bool
     probdistapi::Bool
     loopsetid::Int#index into Model's ::Vector{LoopSet}; 0 indicates no ls
-    function Func(funcid::Int, instr::Instruction, unconstrainapi::Bool, probdistapi::Bool, loopsetid::Int = 0)
-        new(funcid, instr, Int[], Int[], unconstrainapi, probdistapi, loopsetid)
-    end
+    otherargs::Vector{Any}
+end
+function Func(funcid::Int, instr::Instruction, unconstrainapi::Bool, probdistapi::Bool, loopsetid::Int = 0)
+    new(funcid, instr, Int[], Int[], unconstrainapi, probdistapi, loopsetid, Any[])
 end
 # function Func() 
 # end
