@@ -4,12 +4,14 @@ struct Model
     funcs::Vector{Func}
     loops::Vector{LoopSet}
     tracker::Dict{Symbol,Int}
-    mod::Symbol
-    function Model(mod = :ReverseDiffExpressions)
+    mod::Module
+    modsym::Symbol
+    funcdict::Dict{Func,Int}
+    function Model(mod::Module = ReverseDiffExpressions)
         ein = Variable(Symbol("##ONE##"), 1, true)
         target = Variable(Symbol("##TARGET##"), 2, true)
-        Model(Variable[ein, target], Func[], LoopSet[], Dict{Symbol,Int}(), mod)
-    end    
+        new(Variable[ein, target], Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}())
+    end
 end
 
 
@@ -29,13 +31,32 @@ function getvar!(m::Model, s::Symbol)
     id = get(tracker, s, nothing)
     id === nothing ? addvar!(m, s) : vars[id]
 end
+function Func(m::Model, instr::Symbol, args...)
+    ins = Instruction(instr)
+    ins = ins ∈ keys(LoopVectorization.COST) ? ins : Instruction(m.modsym, instr)
+    Func(ins, args...)
+end
 
-addfunc!(m::Model, instr::Symbol, args...) = addfunc!(m, Instruction(m.mod, :instr), args...)
-function addfunc!(m::Model, instr::Instruction, unconstrainapi::Bool, probdistapi::Bool, loopsetid::Int = 0)
-    @unpack funcs = m
-    f = Func(length(funcs) + 1, instr, unconstrainapi, probdistapi, loopsetid)
-    push!(funcs, f)
+function addfunc!(m::Model, f::Func)
+    fid = get!(m.funcdict, f) do
+        push!(m.funcs, f)
+        fid = length(m.funcs)
+        for p ∈ f.vparents
+            push!(m.vars[p].useids, fid)
+        end
+        fid
+    end
+    ret = m.vars[m.funcs[fid].output[]]
+    ret.parentfunc = fid
+    ret
 end
 
 
+uses!(func::Func, m::Model, x::Symbol) = uses!(func, getvar!(m, x))
+# function uses!(f::Func, m::Model, x)
+#     @unpack otherargs, vparents = f
+#     push!(otherargs, x)
+#     push!(vparents, -length(otherargs))
+#     nothing
+# end
 

@@ -1,58 +1,39 @@
+using Base: RefValue
 
 struct Func
-    funcid::Int
     instr::Instruction
-    output::Ref{Int} # Should support unpacking of returned objecs, whether homogonous arrays or heterogenous tuples.
+    output::RefValue{Int} # Should support unpacking of returned objecs, whether homogonous arrays or heterogenous tuples.
     vparents::Vector{Int} # should these be Vector{vparent}, or Ints to ids ?
     unconstrainapi::Bool
     probdistapi::Bool
     loopsetid::Int#index into Model's ::Vector{LoopSet}; 0 indicates no ls
-    otherargs::Vector{Any}
 end
-function Func(funcid::Int, instr::Instruction, unconstrainapi::Bool, probdistapi::Bool, loopsetid::Int = 0)
-    new(funcid, instr, Int[], Int[], unconstrainapi, probdistapi, loopsetid, Any[])
+function Func(instr::Instruction, unconstrainapi::Bool, probdistapi::Bool, loopsetid::Int = 0)
+    Func(instr, Ref(0), Int[], unconstrainapi, probdistapi, loopsetid)
 end
-# function Func() 
-# end
+
+function Base.hash(f::Func, u::UInt)
+    @unpack instr, vparents = f
+    u = hash(instr, u)
+    for p ∈ vparents
+        u = hash(p, u)
+    end
+    u
+end
+Base.isequal(f1::Func, f2::Func) = f1.instr == f2.instr && f1.vparents == f2.vparents
 
 function uses!(f::Func, v::Variable)
-    push!(v.useids, f.funcid)
+    # push!(v.useids, f.funcid)
     push!(f.vparents, v.varid)
-    nothing
+    v
 end
 function returns!(f::Func, v::Variable)
-    push!(f.output, v.varid)
-    v.parentfunc = f.funcid
+    f.output[] = v.varid
     nothing
 end
 
-function LoopVectorization.lower(m::Model, fun::Func, mod)
-    if fun.probdistapi
-        lower_probdistfun(m, fun, mod)
-    elseif fun.unconstrainapi
-        lower_unconstrain(m, fun, mod)
-    elseif iszero(fun.loopsetid)
-        lower_normalfun(m, fun, mod)
-    else
-        lower_loopset(m, fun, mod)
-    end
-end
+
 
 stackpointercall_expr(mod) = Expr(:(.), Expr(:(.), mod, QuoteNode(:ReverseDiffExpressions)), QuoteNote(:stack_pointer_call))
 
-
-function lower_normalfun(m::Model, fun::Func, mod)
-    @unpack instr, output, vparents = fun
-    spc = stackpointercall_expr(mod)
-    call = Expr(:call, spc, Expr(:(.), mod, QuoteNode(f)), STACK_POINTER_NAME)
-    foreach(p -> push!(call.args, name(p)), vparents)
-    # if diff
-        # for p ∈ vparents
-            # push!(call.args, Expr(:call, Expr(:curly, 
-            # istracked(p) && push!(
-        # end
-        # foreach(p -> push!(call.args, name(p)), vparents)
-    # end
-    Expr(:(=), name(output), call)
-end
 

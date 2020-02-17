@@ -1,7 +1,7 @@
 # using much of the name space of LoopVectorization; seems more organized to set it aside.
 module LoopSetDerivatives
 
-using ..ReverseDiffExpressions: VariableTracker
+using ..ReverseDiffExpressions: Model
 
 using ReverseDiffExpressionsBase, LoopVectorization, Parameters
 using ReverseDiffExpressionsBase: DiffRule, OffsetArray
@@ -27,7 +27,7 @@ struct ∂LoopSet
     stored_ops::Vector{Int}
     opsparentsfirst::Vector{Int}
     temparrays::Vector{ArrayReferenceMeta}
-    vartracker::VariableTracker
+    model::Model
 end
 
 function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
@@ -42,7 +42,7 @@ function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
     append!(lsdest.includedarrays, lssrc.includedarrays)
     nothing
 end
-function ∂LoopSet_init(lsold::LoopSet, vartracker::VariableTracker)
+function ∂LoopSet_init(lsold::LoopSet, m::Model)
     mod = lsold.mod; nops = length(operations(lsold))
     ∂LoopSet(
         LoopSet(mod), LoopSet(mod), lsold,
@@ -52,12 +52,12 @@ function ∂LoopSet_init(lsold::LoopSet, vartracker::VariableTracker)
         # sizehint!(DiffRuleOperation[], nops),
         Vector{DiffRuleOperation}(undef, nops),
         fill(-1, nops), sizehint!(Int[], nops),
-        ArrayReferenceMeta[], vartracker
+        ArrayReferenceMeta[], m
     )
 end
-function ∂LoopSet(lsold::LoopSet, vartracker::VariableTracker)
+function ∂LoopSet(lsold::LoopSet, m::Model)
     nops = length(operations(lsold))
-    ∂ls = ∂LoopSet_init(lsold, vartracker)
+    ∂ls = ∂LoopSet_init(lsold, m)
     resize!(∂ls.fls.operations, nops)
     copymeta!(∂ls.fls, ls)
     determine_parents_first_order!(∂ls)

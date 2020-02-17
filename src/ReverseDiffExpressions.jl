@@ -2,7 +2,8 @@ module ReverseDiffExpressions
 
 # using VectorizationBase, SIMDPirates
 # using StackPointers, LinearAlgebra, PaddedMatrices#, StructuredMatrices, ProbabilityDistributions, Parameters
-using LoopVectorization
+using LoopVectorization, Parameters
+using LoopVectorization: Instruction, LoopSet
 
 # using PaddedMatrices:
     # AbstractFixedSizeVector, AbstractMutableFixedSizeVector, UninitializedVector,
@@ -23,7 +24,11 @@ using LoopVectorization
 
 const STACK_POINTER_NAME = Symbol("###STACK##POINTER###")
 
+include("variables.jl")
+include("funcs.jl")
+include("models.jl")
 include("loopsets/loopset_gradients.jl")
+include("lowering.jl")
 # include("adjoints.jl")
 # include("misc_functions.jl")
 # include("special_diff_rules.jl")

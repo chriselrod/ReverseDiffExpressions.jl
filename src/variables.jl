@@ -10,11 +10,11 @@ mutable struct Variable
     name::Symbol
     parentfunc::Int#id of Func creating it.
     useids::Vector{Int}#ids of Funcs that use it.
-    # dims::Dimensions
     tracked::Bool
     initialized::Bool
+    ref::Base.RefValue{Any}
     function Variable(name::Symbol, id::Int = 0, tracked = false)
-        Variable(id, name, 0, Int[], tracked, false)
+        new(id, name, 0, Int[], tracked, false, Ref{Any}())
     end
 end
 # Base.ndims(d::Dimensions) = length(d.sizehints)

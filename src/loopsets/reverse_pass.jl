@@ -245,10 +245,10 @@ function get_adj_input_op_expand!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
 end
 
 function update_store_tracker!(∂ls::∂LoopSet, i::Int, oldop::Operation)
-    @unpack vartracker, ropsargs, tracked_ops, rls = ∂ls
+    @unpack model, ropsargs, tracked_ops, rls = ∂ls
     adjarrayname = adj(name(oldop.ref))
-    if !isdefined(vartracker, adjarrayname)
-        define!(vartracker, adjarrayname)
+    if !isdefined(model, adjarrayname)
+        define!(model, adjarrayname)
         return
     end
     # adjarrayname is already defined, but now we load from it.
