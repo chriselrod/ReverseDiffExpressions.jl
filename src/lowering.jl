@@ -1,28 +1,56 @@
-function LoopVectorization.lower(m::Model, fun::Func, mod)
-    if fun.probdistapi
-        lower_probdistfun(m, fun, mod)
-    elseif fun.unconstrainapi
-        lower_unconstrain(m, fun, mod)
-    elseif iszero(fun.loopsetid)
-        lower_normalfun(m, fun, mod)
-    else
-        lower_loopset(m, fun, mod)
+
+# Should LoopVectorization.lower and ReverseDiffExpressions.lower be distinct?
+import LoopVectorization: lower, lower!
+# Because they mean the same thing -- turn obj into Expr -- I'm importing LoopVectorization.lower for now.
+
+# Algorithm for lowering:
+# 1. Pick an unpicked func.
+# 2. Check if all vars are initialized. If so, go to step 4.
+# 3. For all that are not, check if they have a parentfunc. Error if not, if so go to step 1 (picking that parentfunc); when done, resume here.
+# 4. Lower func, initializing any vars it defines.
+# 5. Return up callstack to 3, or iterate to next unpicked function.
+#
+# Eventually, this should be improved by picking the order more intelligently.
+
+function lower(m::Model)
+    q = Expr(:block)
+    Nfuncs = length(m.funcs)
+    for n ∈ 0:Nfuncs-1
+        # Because it recursively calls to lower funcs on which it is dependendent,
+        # trying to lower the last first (which probably depend on many previous ones)
+        # should lower in a cache-friendly order, i.e. things will be defined in the
+        # resulting expression closer to when they are used.
+        # I'm sure much smarter algorithms exist.
+        func = m.funcs[Nfuncs - n]
+        lowered(func) || lower!(q, func, m)
+        
     end
 end
 
+function lower!(q::Expr, func::Func, m::Model)
+    iszero(func.loopsetid) || return lower_loopset!(q, func, m)
+    @unpack vars, funcs = m
 
-function lower_normalfun(m::Model, fun::Func, mod)
-    @unpack instr, output, vparents = fun
-    spc = stackpointercall_expr(mod)
-    call = Expr(:call, spc, Expr(:(.), mod, QuoteNode(f)), STACK_POINTER_NAME)
-    foreach(p -> push!(call.args, name(p)), vparents)
-    # if diff
-        # for p ∈ vparents
-            # push!(call.args, Expr(:call, Expr(:curly, 
-            # istracked(p) && push!(
-        # end
-        # foreach(p -> push!(call.args, name(p)), vparents)
-    # end
-    Expr(:(=), name(output), call)
+    call = Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), convert(Expr, func.instr), STACK_POINTER_NAME)
+    for vpid ∈ parents(func)
+        p = vars[vpid]
+        p.initialized || lower!(q, funcs[p.parentfunc], m)
+        push!(call.args, p)
+    end
+    retvarid = func.output[]
+    ret = Expr(:tuple, STACK_POINTER_NAME)
+    if !iszero(retvarid)
+        retvar = vars[retvarid]
+        push!(ret.args, name(retvar))
+        retvar.initialized = true
+    end
+    call = Expr(:(=), ret, call)
+    push!(q.args, call)
+    func.lowered[] = true
+end
+
+
+function lower_loopset!(q::Expr, func::Func, m::Model)
+
 end
 

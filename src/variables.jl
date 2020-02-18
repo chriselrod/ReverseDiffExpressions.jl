@@ -23,6 +23,17 @@ end
 istracked(v::Variable) = v.tracked
 LoopVectorization.name(v::Variable) = v.name
 
+LoopVectorization.parent(v::Variable) = v.parentfunc
+hasparent(v::Variable) = parent(v) != 0
+
+function Base.push!(x::Vector{Any}, v::Variable)
+    if isdefined(v.ref, :x)
+        push!(x, v.ref[])
+    else
+        push!(x, v.name)
+    end
+end
+
 # function Base.hash(v::Variable, u::UInt)
 
 # end

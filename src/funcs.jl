@@ -1,15 +1,15 @@
 using Base: RefValue
 
+
 struct Func
     instr::Instruction
     output::RefValue{Int} # Should support unpacking of returned objecs, whether homogonous arrays or heterogenous tuples.
     vparents::Vector{Int} # should these be Vector{vparent}, or Ints to ids ?
-    unconstrainapi::Bool
-    probdistapi::Bool
     loopsetid::Int#index into Model's ::Vector{LoopSet}; 0 indicates no ls
+    lowered::RefValue{Bool}
 end
 function Func(instr::Instruction, unconstrainapi::Bool, probdistapi::Bool, loopsetid::Int = 0)
-    Func(instr, Ref(0), Int[], unconstrainapi, probdistapi, loopsetid)
+    Func(instr, Ref(0), Int[], loopsetid, Ref(false))
 end
 
 function Base.hash(f::Func, u::UInt)
@@ -31,7 +31,8 @@ function returns!(f::Func, v::Variable)
     f.output[] = v.varid
     nothing
 end
-
+lowered(f::Func) = f.lowered[]
+LoopVectorization.parents(f::Func) = f.vparents
 
 
 stackpointercall_expr(mod) = Expr(:(.), Expr(:(.), mod, QuoteNode(:ReverseDiffExpressions)), QuoteNote(:stack_pointer_call))
