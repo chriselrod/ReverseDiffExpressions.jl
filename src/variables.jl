@@ -14,7 +14,7 @@ mutable struct Variable
     initialized::Bool
     ref::Base.RefValue{Any}
     function Variable(name::Symbol, id::Int = 0, tracked = false)
-        new(id, name, 0, Int[], tracked, false, Ref{Any}())
+        new(id, name, 0, Int[], tracked, true, Ref{Any}())
     end
 end
 # Base.ndims(d::Dimensions) = length(d.sizehints)
@@ -24,14 +24,12 @@ istracked(v::Variable) = v.tracked
 LoopVectorization.name(v::Variable) = v.name
 
 LoopVectorization.parent(v::Variable) = v.parentfunc
-hasparent(v::Variable) = parent(v) != 0
+hasparent(v::Variable) = !iszero(parent(v))
+
+isref(v::Variable) = isdefined(v.ref, :x)
 
 function Base.push!(x::Vector{Any}, v::Variable)
-    if isdefined(v.ref, :x)
-        push!(x, v.ref[])
-    else
-        push!(x, v.name)
-    end
+    isref(v) ? push!(x, v.ref[]) : push!(x, v.name)
 end
 
 # function Base.hash(v::Variable, u::UInt)

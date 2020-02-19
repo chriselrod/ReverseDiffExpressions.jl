@@ -7,10 +7,12 @@ struct Model
     mod::Module
     modsym::Symbol
     funcdict::Dict{Func,Int}
+    inputvars::Vector{Int}
+    # targetinit::RefValue{Bool}
     function Model(mod::Module = ReverseDiffExpressions)
         ein = Variable(Symbol("##ONE##"), 1, true)
         target = Variable(Symbol("##TARGET##"), 2, true)
-        new(Variable[ein, target], Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}())
+        new(Variable[ein, target], Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}(), Int[])#, Ref(false))
     end
 end
 
