@@ -23,7 +23,6 @@ function lower(m::Model)
         # I'm sure much smarter algorithms exist.
         func = m.funcs[Nfuncs - n]
         lowered(func) || lower!(q, func, m)
-        
     end
 end
 
@@ -51,6 +50,6 @@ end
 
 
 function lower_loopset!(q::Expr, func::Func, m::Model)
-
+    push!(q.args, setup_call(m.loops[func.loopsetid]))
 end
 
