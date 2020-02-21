@@ -12,9 +12,13 @@ import LoopVectorization: lower, lower!
 #
 # Eventually, this should be improved by picking the order more intelligently.
 
-function lower(m::Model)
+lower(m::Model) = lower!(Expr(:block), m)
+function lower!(q::Expr, m::Model)
     q = Expr(:block)
     Nfuncs = length(m.funcs)
+    # target = targetvar(m)
+    # if iszero(length(target.useids))
+        # lower!(q, target, m)
     for n ∈ 0:Nfuncs-1
         # Because it recursively calls to lower funcs on which it is dependendent,
         # trying to lower the last first (which probably depend on many previous ones)
@@ -24,6 +28,7 @@ function lower(m::Model)
         func = m.funcs[Nfuncs - n]
         lowered(func) || lower!(q, func, m)
     end
+    q
 end
 
 function lower!(q::Expr, func::Func, m::Model)
@@ -38,13 +43,19 @@ function lower!(q::Expr, func::Func, m::Model)
     end
     retvarid = func.output[]
     ret = Expr(:tuple, STACK_POINTER_NAME)
-    if !iszero(retvarid)
-        retvar = vars[retvarid]
-        push!(ret.args, name(retvar))
-        retvar.initialized = true
-    end
     call = Expr(:(=), ret, call)
     push!(q.args, call)
+    if !iszero(retvarid)
+        retvar = vars[retvarid]
+        if retvarid == 2
+            retvname = gensym("target")
+            push!(ret.args, retvname)
+            push!(q.args, Expr(:(+=), name(retvar), retvname))
+        else
+            push!(ret.args, name(retvar))
+            retvar.initialized = true
+        end
+    end
     func.lowered[] = true
 end
 

@@ -29,6 +29,7 @@ function uses!(f::Func, v::Variable)
 end
 function returns!(f::Func, v::Variable)
     f.output[] = v.varid
+    v.initialized = false
     nothing
 end
 lowered(f::Func) = f.lowered[]
