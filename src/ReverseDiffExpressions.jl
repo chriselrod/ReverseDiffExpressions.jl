@@ -44,7 +44,9 @@ end
 include("variables.jl")
 include("funcs.jl")
 include("models.jl")
-include("loopsets/loopset_gradients.jl")
+include("tracking_description.jl")
+include("loopsets/loopset_gradients.jl") # defines a module that includes the other loopsets/*.jl files
+include("differentiate.jl")
 include("lowering.jl")
 # include("adjoints.jl")
 # include("misc_functions.jl")
