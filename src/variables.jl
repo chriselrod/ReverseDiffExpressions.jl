@@ -13,8 +13,9 @@ mutable struct Variable
     tracked::Bool
     initialized::Bool
     ref::Base.RefValue{Any}
-    function Variable(name::Symbol, id::Int = 0, tracked = false)
-        new(id, name, 0, Int[], tracked, true, Ref{Any}())
+    function Variable(name::Symbol, id::Int = 0)#, tracked = false)
+        # new(id, name, 0, Int[], tracked, true, Ref{Any}())
+        new(id, name, 0, Int[], false, true, Ref{Any}())
     end
 end
 # Base.ndims(d::Dimensions) = length(d.sizehints)

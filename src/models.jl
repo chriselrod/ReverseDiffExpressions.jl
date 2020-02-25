@@ -17,6 +17,8 @@ struct Model
 end
 
 
+reset_funclowered!(m::Model) = foreach(f -> (f.lowered[] = false), m.funcs)
+reset_varinitialized!(m::Model) = foreach(v -> (v.initialized = isref(v)), m.vars)
 onevar(m::Model) = @inbounds m.vars[1]
 targetvar(m::Model) = @inbounds m.vars[2]
 

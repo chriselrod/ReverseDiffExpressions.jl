@@ -14,7 +14,6 @@ import LoopVectorization: lower, lower!
 
 lower(m::Model) = lower!(Expr(:block), m)
 function lower!(q::Expr, m::Model)
-    q = Expr(:block)
     Nfuncs = length(m.funcs)
     # target = targetvar(m)
     # if iszero(length(target.useids))
