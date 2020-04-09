@@ -12,10 +12,12 @@ mutable struct Variable
     useids::Vector{Int}#ids of Funcs that use it.
     tracked::Bool
     initialized::Bool
-    ref::Base.RefValue{Any}
-    function Variable(name::Symbol, id::Int = 0)#, tracked = false)
-        # new(id, name, 0, Int[], tracked, true, Ref{Any}())
-        new(id, name, 0, Int[], false, true, Ref{Any}())
+    ref::Any
+    # function Variable(name::Symbol, id::Int)
+        # new(id, name, 0, Int[], false, true)
+    # end
+    function Variable(name::Symbol, id::Int, tracked = false)
+        new(id, name, 0, Int[], tracked, true)
     end
 end
 # Base.ndims(d::Dimensions) = length(d.sizehints)
@@ -27,10 +29,10 @@ LoopVectorization.name(v::Variable) = v.name
 LoopVectorization.parent(v::Variable) = v.parentfunc
 hasparent(v::Variable) = !iszero(parent(v))
 
-isref(v::Variable) = isdefined(v.ref, :x)
+isref(v::Variable) = isdefined(v, :ref)
 
 function Base.push!(x::Vector{Any}, v::Variable)
-    isref(v) ? push!(x, v.ref[]) : push!(x, v.name)
+    isref(v) ? push!(x, v.ref) : push!(x, v.name)
 end
 
 # function Base.hash(v::Variable, u::UInt)

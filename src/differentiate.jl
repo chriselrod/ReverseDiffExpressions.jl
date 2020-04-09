@@ -28,7 +28,7 @@ function add_forward_pass_func!(∂m::Model, diffvars::Vector{Vector{Variable}},
 
     for vpid ∈ parents(func)
         p = vars[vpid]
-        p.initialized || # add p
+        p.initialized ||  # add p
     end
     retvarid = func.output[]
     if revarid != 0 && retvarid != 2
