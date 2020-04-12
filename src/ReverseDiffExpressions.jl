@@ -2,7 +2,7 @@ module ReverseDiffExpressions
 
 # using VectorizationBase, SIMDPirates
 # using StackPointers, LinearAlgebra, PaddedMatrices#, StructuredMatrices, ProbabilityDistributions, Parameters
-using LoopVectorization, Parameters
+using LoopVectorization, Parameters, OffsetArrays
 using LoopVectorization: Instruction, LoopSet
 using ReverseDiffExpressionsBase: Target
 

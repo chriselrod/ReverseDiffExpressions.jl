@@ -1,5 +1,5 @@
 using Base: RefValue
-
+using LoopVectorization: parents, name, parent
 
 struct Func
     instr::Instruction

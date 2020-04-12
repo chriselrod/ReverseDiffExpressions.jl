@@ -6,7 +6,7 @@
 # end
 
 mutable struct Variable
-    varid::Int
+    varid::Int # 0 is target, 1 is One()
     name::Symbol
     parentfunc::Int#id of Func creating it.
     useids::Vector{Int}#ids of Funcs that use it.

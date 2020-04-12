@@ -4,18 +4,12 @@ function differentiate(m::Model)
 end
 
 function differentiate!(∂m::Model, m::Model)
+    reset_funclowered!(m)
+    reset_varinitialized!(m)
     Nfuncs = length(m.funcs)
     diffvars = Vector{OffsetVector{Variable}}(undef, Nfuncs) # store vars in DiffRuleOperation order
-    # target = targetvar(m)
-    # if iszero(length(target.useids))
-        # lower!(q, target, m)
-    for n ∈ 0:Nfuncs-1
-        # Because it recursively calls to lower funcs on which it is dependendent,
-        # trying to lower the last first (which probably depend on many previous ones)
-        # should lower in a cache-friendly order, i.e. things will be defined in the
-        # resulting expression closer to when they are used.
-        # I'm sure much smarter algorithms exist.
-        func = m.funcs[Nfuncs - n]
+    for n ∈ 1:Nfuncs # is 
+        func = m.funcs[n]
         lowered(func) || add_forward_pass_func!(∂m, diffvars, func, m)
     end
     reset_funclowered!(m)
@@ -27,8 +21,7 @@ function add_forward_pass_func!(∂m::Model, diffvars::Vector{Vector{Variable}},
     iszero(func.loopsetid) || return differentiate_loopset!(q, func, m)
 
     for vpid ∈ parents(func)
-        p = vars[vpid]
-        p.initialized ||  # add p
+        p.initialized || add_forward_pass_func!(∂m, diffvars, getparent(m, getvar(m, vpid)), m)
     end
     retvarid = func.output[]
     if revarid != 0 && retvarid != 2

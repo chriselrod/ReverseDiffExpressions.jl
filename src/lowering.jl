@@ -14,6 +14,8 @@ import LoopVectorization: lower, lower!
 
 lower(m::Model) = lower!(Expr(:block), m)
 function lower!(q::Expr, m::Model)
+    reset_funclowered!(m)
+    reset_varinitialized!(m)
     Nfuncs = length(m.funcs)
     # target = targetvar(m)
     # if iszero(length(target.useids))
@@ -44,10 +46,10 @@ function lower!(q::Expr, func::Func, m::Model)
     ret = Expr(:tuple, STACK_POINTER_NAME)
     call = Expr(:(=), ret, call)
     push!(q.args, call)
-    if !iszero(retvarid)
+    if retvarid ≥ 0
         retvar = vars[retvarid]
-        if retvarid == 2
-            retvname = gensym("target")
+        if iszero(retvarid)
+            retvname = gensym(:target)
             push!(ret.args, retvname)
             push!(q.args, Expr(:(+=), name(retvar), retvname))
         else
