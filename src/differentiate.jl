@@ -1,32 +1,20 @@
 
+diffsym(s::Symbol) = Symbol(s, "##BAR##")
+diffsym(v::Variable) = diffsym(name(v))
+
 function differentiate(m::Model)
-    differentiate!(Model(m.mod), m)
+    differentiate!(∂Model(m))
 end
 
-function differentiate!(∂m::Model, m::Model)
-    reset_funclowered!(m)
-    reset_varinitialized!(m)
-    Nfuncs = length(m.funcs)
-    diffvars = Vector{OffsetVector{Variable}}(undef, Nfuncs) # store vars in DiffRuleOperation order
-    for n ∈ 1:Nfuncs # is 
-        func = m.funcs[n]
-        lowered(func) || add_forward_pass_func!(∂m, diffvars, func, m)
+function differentiate!(∂m::∂Model)
+    @unpack mold = ∂m
+    reset_varinitialized!(mold)
+    reset_funclowered!(mold)
+    
+    # diffvars = Vector{DiffRuleVariable}(undef, length(mold.funcs))
+    for (n,func) ∈ enumerate(mold.funcs) # is 
+        lowered(func) || add_func_diff!(∂m, func)
     end
-    reset_funclowered!(m)
-    q
-end
-
-function add_forward_pass_func!(∂m::Model, diffvars::Vector{Vector{Variable}}, func::Func, m::Model)
-    # Need to implement differentiate_loopset; most of the work should be completed in src/loopsets.
-    iszero(func.loopsetid) || return differentiate_loopset!(q, func, m)
-
-    for vpid ∈ parents(func)
-        p.initialized || add_forward_pass_func!(∂m, diffvars, getparent(m, getvar(m, vpid)), m)
-    end
-    retvarid = func.output[]
-    if revarid != 0 && retvarid != 2
-        # p.initalized = true
-    end
-    func.lowered[] = true
+    ∂m.m
 end
 

@@ -32,14 +32,28 @@ function lower!(q::Expr, m::Model)
     q
 end
 
+function asexpr(instr::LoopVectorization.Instruction)
+    if instr.mod === Symbol("")
+        instr.instr
+    else
+        Expr(:(.), instr.mod, QuoteNode(instr.instr))
+    end
+end
+
 function lower!(q::Expr, func::Func, m::Model)
     iszero(func.loopsetid) || return lower_loopset!(q, func, m)
     @unpack vars, funcs = m
 
-    call = Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), convert(Expr, func.instr), STACK_POINTER_NAME)
+    call = if func.probdistapi
+        f = m.gradmodel ? :∂logdensity! : :logdensity
+        dist = Expr(:curly, func.instr, map(id -> istracked(m.vars[id]), parents(func))...)
+        Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), f, STACK_POINTER_NAME, dist)
+    else
+        Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), asexpr(func.instr), STACK_POINTER_NAME)
+    end
     for vpid ∈ parents(func)
         p = vars[vpid]
-        p.initialized || lower!(q, funcs[p.parentfunc], m)
+        p.initialized || foreach(pf -> lower!(q, funcs[pf], m), parents(p))
         push!(call.args, p)
     end
     retvarid = func.output[]

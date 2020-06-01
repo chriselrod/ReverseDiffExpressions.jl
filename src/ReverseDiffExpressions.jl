@@ -2,9 +2,10 @@ module ReverseDiffExpressions
 
 # using VectorizationBase, SIMDPirates
 # using StackPointers, LinearAlgebra, PaddedMatrices#, StructuredMatrices, ProbabilityDistributions, Parameters
-using LoopVectorization, Parameters, OffsetArrays
-using LoopVectorization: Instruction, LoopSet
-using ReverseDiffExpressionsBase: Target
+using LoopVectorization, UnPack, OffsetArrays
+using LoopVectorization: Instruction, LoopSet, instruction
+using ReverseDiffExpressionsBase: Target, InstructionArgs, DiffRule, DERIVATIVERULES, FALLBACK_RULES, num_parents
+using ReverseDiffExpressionsBase
 
 export Target
 
@@ -34,6 +35,7 @@ include("funcs.jl")
 include("models.jl")
 include("tracking_description.jl")
 include("loopsets/loopset_gradients.jl") # defines a module that includes the other loopsets/*.jl files
+include("diffrulevars.jl")
 include("differentiate.jl")
 include("lowering.jl")
 # include("adjoints.jl")

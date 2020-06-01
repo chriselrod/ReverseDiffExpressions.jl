@@ -3,13 +3,13 @@ module LoopSetDerivatives
 
 using ..ReverseDiffExpressions: Model
 
-using ReverseDiffExpressionsBase, LoopVectorization, Parameters
-using ReverseDiffExpressionsBase: DiffRule, OffsetArray
+using ReverseDiffExpressionsBase, LoopVectorization, UnPack, OffsetArrays
+using ReverseDiffExpressionsBase: DiffRule
 using LoopVectorization:
     LoopSet, operations, isload, iscompute, isstore, isconstant,
     constant, memload, compute, memstore,
     loopdependencies, reduceddependencies, reducedchildren,
-    refname, name, lower, parents,
+    vptr, name, lower, parents,
     Operation, add_op!, ArrayReferenceMeta
     
 

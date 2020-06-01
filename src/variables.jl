@@ -8,7 +8,7 @@
 mutable struct Variable
     varid::Int # 0 is target, 1 is One()
     name::Symbol
-    parentfunc::Int#id of Func creating it.
+    parentfuncs::Vector{Int}#id of Func creating it.
     useids::Vector{Int}#ids of Funcs that use it.
     tracked::Bool
     initialized::Bool
@@ -17,7 +17,7 @@ mutable struct Variable
         # new(id, name, 0, Int[], false, true)
     # end
     function Variable(name::Symbol, id::Int, tracked = false)
-        new(id, name, 0, Int[], tracked, true)
+        new(id, name, Int[], Int[], tracked, true)
     end
 end
 # Base.ndims(d::Dimensions) = length(d.sizehints)
@@ -26,7 +26,7 @@ end
 istracked(v::Variable) = v.tracked
 LoopVectorization.name(v::Variable) = v.name
 
-LoopVectorization.parent(v::Variable) = v.parentfunc
+LoopVectorization.parents(v::Variable) = v.parentfuncs
 hasparent(v::Variable) = !iszero(parent(v))
 
 isref(v::Variable) = isdefined(v, :ref)

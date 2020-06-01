@@ -1,10 +1,10 @@
 
 struct DiffRuleOperation
     diffrule::DiffRule
-    operations::OffsetArray{Operation,1}
+    operations::OffsetVector{Operation,Vector{Operation}}
 end
 function DiffRuleOperation(dr::DiffRule, nparents::Int = num_parents(dr))
-    ops = OffsetArray{Operation}(undef, -nparents:last(last(diffrule.sections)))
+    ops = OffsetArray{Operation}(undef, -nparents:last(last(dr.sections)))
     DiffRuleOperation(
         dr, ops
     )
