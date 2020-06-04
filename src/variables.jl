@@ -16,8 +16,8 @@ mutable struct Variable
     # function Variable(name::Symbol, id::Int)
         # new(id, name, 0, Int[], false, true)
     # end
-    function Variable(name::Symbol, id::Int, tracked = false)
-        new(id, name, Int[], Int[], tracked, true)
+    function Variable(name::Symbol, id::Int)
+        new(id, name, Int[], Int[], false, true)
     end
 end
 # Base.ndims(d::Dimensions) = length(d.sizehints)

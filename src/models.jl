@@ -30,8 +30,13 @@ struct ∂Model # Houses meta data.
     mold::Model
     mapping::Vector{Int} # maps old vars to new ones
     ∂mapping::Vector{Int} # maps old vars to new ∂ones
+    gradvar::Variable
 end
-∂Model(mold::Model) = ∂Model(Model(mold.mod, true), mold, Int[], Int[])
+function ∂Model(mold::Model)
+    m = Model(mold.mod, true)
+    gradvar = addvar!(m, Symbol("#∇#"))
+    ∂Model(m, mold, Int[], Int[], gradvar)
+end
 
 # corresponding_func(∂m::∂Model, func::Func) = ∂m.m.funcs[∂m.mapping[∂m.mold.funcdict[func]]]
 
@@ -40,6 +45,7 @@ function reset_varinitialized!(m::Model)
     foreach(v -> (v.initialized = isref(v)), m.vars)
     foreach(v -> initialize_var!(m, v), m.inputvars)
 end
+reset_var_tracked!(m::Model) = foreach(v -> (v.tracked = false), m.vars)
 onevar(m::Model) = @inbounds m.vars[1]
 targetvar(m::Model) = @inbounds m.vars[0]
 
@@ -137,4 +143,15 @@ uses!(func::Func, m::Model, x::Symbol) = uses!(func, getvar!(m, x))
 #     push!(vparents, -length(otherargs))
 #     nothing
 # end
+
+function var_tracked_search!(m::Model, v::Variable)
+    v.tracked && return true
+    for fid ∈ parents(v), vid ∈ parents(m.funcs[fid])
+        vp = m.vars[vid]
+        var_tracked_search!(m, vp) && return vp.tracked = true
+    end
+    false
+end
+
+propagate_var_tracked!(m::Model) = foreach(v -> var_tracked_search!(m, v), m.vars)
 
