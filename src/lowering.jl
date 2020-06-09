@@ -40,16 +40,55 @@ function asexpr(instr::LoopVectorization.Instruction)
     end
 end
 
+function getprop_call!(q::Expr, func::Func, m::Model)
+    @unpack vars = m
+    vparents = parents(func)
+    gp = Expr(:(.), name(vars[vparents[1]]), QuoteNode(vars[vparents[2]].ref))
+    retvar = vars[func.output[]]
+    retvar.initialized = true
+    line = Expr(:(=), name(retvar), gp)
+    push!(q.args, line)
+    func.lowered[] = true
+end
+function indfunc_call!(q::Expr, func::Func, m::Model)
+    @unpack vars, funcs = m
+    vparents = parents(func)
+    call = Expr(:call, asexpr(func.instr))
+    for vpid ∈ parents(func)
+        p = vars[vpid]
+        p.initialized || foreach(pf -> lower!(q, funcs[pf], m), parents(p))
+        push!(call.args, p)
+    end
+    retvarid = func.output[]
+    if retvarid ≥ 0
+        retvar = vars[retvarid]
+        retvname = iszero(retvarid) ? gensym(:target) : name(retvar)
+        call = Expr(:(=), retvname, call)
+        push!(q.args, call)
+        if iszero(retvarid)
+            push!(q.args, Expr(:(+=), name(retvar), retvname))
+        else
+            retvar.initialized = true
+        end
+    else
+        push!(q.args, call)
+    end
+    func.lowered[] = true
+end
+
 function lower!(q::Expr, func::Func, m::Model)
     iszero(func.loopsetid) || return lower_loopset!(q, func, m)
     @unpack vars, funcs = m
-
-    call = if func.probdistapi
+    if func.probdistapi
         f = m.gradmodel ? :∂logdensity! : :logdensity
-        dist = Expr(:curly, func.instr, map(id -> istracked(m.vars[id]), parents(func))...)
-        Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), f, STACK_POINTER_NAME, dist)
+        dist = Expr(:call, Expr(:curly, func.instr.instr, Expr(:curly, :Tuple, map(id -> istracked(m.vars[id]), parents(func))...)))
+        call = Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), f, STACK_POINTER_NAME, dist)
+    elseif func.instr === Instruction(:Base, :getproperty)
+        return getprop_call!(q, func, m)
+    elseif isindexfunc(func)
+        return indfunc_call!(q, func, m)
     else
-        Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), asexpr(func.instr), STACK_POINTER_NAME)
+        call = Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), asexpr(func.instr), STACK_POINTER_NAME)
     end
     for vpid ∈ parents(func)
         p = vars[vpid]

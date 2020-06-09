@@ -11,11 +11,12 @@ struct Model
     varid::Ref{UInt}
     tracked::Vector{Bool}
     gradmodel::Bool
+    # targets::Vector{Int}
     # targetinit::RefValue{Bool}
     function Model(mod::Module = ReverseDiffExpressions, gradmodel::Bool = false)
-        target = Variable(Symbol("##TARGET##"), 0, true)
-        ein = Variable(Symbol("##ONE##"), 1, false)
-        new(OffsetVector(Variable[target, ein], -1), Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}(), Int[], Ref(UInt(2)), Bool[], gradmodel)
+        target = Variable(Symbol("##TARGET##"), 0); target.tracked = true
+        ein = Variable(Symbol("##ONE##"), 1)
+        new(OffsetVector(Variable[target, ein], -1), Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}(), Int[], Ref(UInt(2)), Bool[], gradmodel)#, [0])
     end
 end
 
@@ -86,13 +87,13 @@ function getvar!(∂m::∂Model, vold::Variable)::Variable
     @unpack m = ∂m
     @unpack vars, tracker = m
     s = name(vold)
-    id = get(tracker, s, nothing)
-    vnew = if isnothing(id)
+    vnew = if isref(vold)
         v = addvar!(m, s)
-        isref(vold) && (v.ref = vold.ref)
+        v.ref = vold.ref
         v
     else
-        vars[id]
+        id = get(tracker, s, nothing)
+        isnothing(id) ? addvar!(m, s) : vars[id]
     end
     vnew.tracked = vold.tracked
     vnew
@@ -120,11 +121,9 @@ function Func(m::Model, instr::Symbol, args...)
 end
 
 function addfunc!(m::Model, f::Func)
-    # @show m
     fid = get!(m.funcdict, f) do
         push!(m.funcs, f)
         fid = length(m.funcs)
-#        @show f (typeof(m.vars), length(m.vars))
         for p ∈ f.vparents
             push!(m.vars[p].useids, fid)
         end
@@ -148,10 +147,27 @@ function var_tracked_search!(m::Model, v::Variable)
     v.tracked && return true
     for fid ∈ parents(v), vid ∈ parents(m.funcs[fid])
         vp = m.vars[vid]
-        var_tracked_search!(m, vp) && return vp.tracked = true
+        var_tracked_search!(m, vp) && return (v.tracked = vp.tracked = true)
     end
     false
 end
 
 propagate_var_tracked!(m::Model) = foreach(v -> var_tracked_search!(m, v), m.vars)
+
+function getconstindex!(m::Model, vout::Variable, vin::Variable, index::Int)
+    if 0 < index < 10
+        f = [:first, :second, :third, :fourth, :fifth, :sixth, :seventh, :eighth, :ninth][index]
+        func = Func(Instruction(:ReverseDiffExpressionsBase, f), false)
+        uses!(func, vin)
+    else
+        func = Func(Instruction(:Base, :getindex), false)
+        vindex = addvar!(m, Symbol(""))
+        vindex.ref = index
+        uses!(func, vin)
+        uses!(func, vindex)
+    end
+    returns!(func, vout)
+    addfunc!(m, func)
+    func
+end
 

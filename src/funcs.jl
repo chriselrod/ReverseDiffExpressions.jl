@@ -9,7 +9,7 @@ struct Func
     probdistapi::Bool
     lowered::RefValue{Bool}
 end
-function Func(instr::Instruction, unconstrainapi::Bool, probdistapi::Bool, loopsetid::Int = 0)
+function Func(instr::Instruction, probdistapi::Bool = false, loopsetid::Int = 0)
     Func(instr, Ref{Int}(), Int[], loopsetid, probdistapi, Ref(false))
 end
 
@@ -29,6 +29,7 @@ function uses!(f::Func, v::Variable)
     v
 end
 function returns!(f::Func, v::Variable)
+    @assert name(v) != Symbol("##TARGET####BAR##")
     f.output[] = v.varid
     # push!(parents(v), f)
     v.initialized = false
@@ -41,4 +42,10 @@ ReverseDiffExpressionsBase.InstructionArgs(f::Func) = InstructionArgs(instructio
 
 stackpointercall_expr(mod) = Expr(:(.), Expr(:(.), mod, QuoteNode(:ReverseDiffExpressions)), QuoteNote(:stack_pointer_call))
 
+function isindexfunc(func::Func)
+    func.instr.instr === :view || func.instr.instr === :getindex || func.instr.instr ∈ (:first, :second, :third, :fourth, :fifth, :sixth, :seventh, :eigth, :ninth, :last)
+end
+
+# function getconstindex!(m::Model, index::Integer, vin::Variable)
+# end
 
