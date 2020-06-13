@@ -24,6 +24,7 @@ end
 # Base.ndims(v::Variable) = length(v.dims)
 # isscalar(v::Variable) = iszero(ndims(v))
 istracked(v::Variable) = v.tracked
+isinitialized(v::Variable) = v.initialized
 LoopVectorization.name(v::Variable) = v.name
 
 LoopVectorization.parents(v::Variable) = v.parentfuncs

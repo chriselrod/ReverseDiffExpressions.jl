@@ -14,21 +14,10 @@ import LoopVectorization: lower, lower!
 
 lower(m::Model) = lower!(Expr(:block), m)
 function lower!(q::Expr, m::Model)
+    @unpack vars, targets = m
     reset_funclowered!(m)
     reset_varinitialized!(m)
-    Nfuncs = length(m.funcs)
-    # target = targetvar(m)
-    # if iszero(length(target.useids))
-        # lower!(q, target, m)
-    for n ∈ 0:Nfuncs-1
-        # Because it recursively calls to lower funcs on which it is dependendent,
-        # trying to lower the last first (which probably depend on many previous ones)
-        # should lower in a cache-friendly order, i.e. things will be defined in the
-        # resulting expression closer to when they are used.
-        # I'm sure much smarter algorithms exist.
-        func = m.funcs[Nfuncs - n]
-        lowered(func) || lower!(q, func, m)
-    end
+    foreach(t -> lower!(q, m, vars[t]), Iterators.reverse(m.targets))
     q
 end
 
@@ -40,7 +29,7 @@ function asexpr(instr::LoopVectorization.Instruction)
     end
 end
 
-function getprop_call!(q::Expr, func::Func, m::Model)
+function getprop_call!(q::Expr, m::Model, func::Func)
     @unpack vars = m
     vparents = parents(func)
     gp = Expr(:(.), name(vars[vparents[1]]), QuoteNode(vars[vparents[2]].ref))
@@ -50,7 +39,7 @@ function getprop_call!(q::Expr, func::Func, m::Model)
     push!(q.args, line)
     func.lowered[] = true
 end
-function indfunc_call!(q::Expr, func::Func, m::Model)
+function indfunc_call!(q::Expr, m::Model, func::Func)
     @unpack vars, funcs = m
     vparents = parents(func)
     call = Expr(:call, asexpr(func.instr))
@@ -75,8 +64,14 @@ function indfunc_call!(q::Expr, func::Func, m::Model)
     end
     func.lowered[] = true
 end
-
-function lower!(q::Expr, func::Func, m::Model)
+function lower!(q::Expr, m::Model, v::Variable)
+    isinitialized(v) && return
+    vparents = parents(p)
+    foreach(pf -> lower!(q, funcs[pf], m), parents(p))
+    push!(call.args, p)
+    nothing
+end
+function lower!(q::Expr, m::Model, func::Func)
     iszero(func.loopsetid) || return lower_loopset!(q, func, m)
     @unpack vars, funcs = m
     if func.probdistapi
@@ -84,17 +79,15 @@ function lower!(q::Expr, func::Func, m::Model)
         dist = Expr(:call, Expr(:curly, func.instr.instr, Expr(:curly, :Tuple, map(id -> istracked(m.vars[id]), parents(func))...)))
         call = Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), f, STACK_POINTER_NAME, dist)
     elseif func.instr === Instruction(:Base, :getproperty)
-        return getprop_call!(q, func, m)
+        return getprop_call!(q, m, func)
     elseif isindexfunc(func)
-        return indfunc_call!(q, func, m)
+        return indfunc_call!(q, m, func)
     else
         call = Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), asexpr(func.instr), STACK_POINTER_NAME)
     end
-    for vpid ∈ parents(func)
-        p = vars[vpid]
-        p.initialized || foreach(pf -> lower!(q, funcs[pf], m), parents(p))
-        push!(call.args, p)
-    end
+    
+    foreach(vpid -> lower!(q, m, vars[vpid]), parents(func))
+    
     retvarid = func.output[]
     ret = Expr(:tuple, STACK_POINTER_NAME)
     call = Expr(:(=), ret, call)

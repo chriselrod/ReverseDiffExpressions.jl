@@ -11,12 +11,12 @@ struct Model
     varid::Ref{UInt}
     tracked::Vector{Bool}
     gradmodel::Bool
-    # targets::Vector{Int}
+    targets::Vector{Int}
     # targetinit::RefValue{Bool}
     function Model(mod::Module = ReverseDiffExpressions, gradmodel::Bool = false)
         target = Variable(Symbol("##TARGET##"), 0); target.tracked = true
         ein = Variable(Symbol("##ONE##"), 1)
-        new(OffsetVector(Variable[target, ein], -1), Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}(), Int[], Ref(UInt(2)), Bool[], gradmodel)#, [0])
+        new(OffsetVector(Variable[target, ein], -1), Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}(), Int[], Ref(UInt(2)), Bool[], gradmodel, [0])
     end
 end
 
