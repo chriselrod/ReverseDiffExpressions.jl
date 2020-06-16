@@ -13,7 +13,7 @@ function differentiate!(∂m::∂Model)
     
     # diffvars = Vector{DiffRuleVariable}(undef, length(mold.funcs))
     for (n,func) ∈ enumerate(mold.funcs) # is 
-        lowered(func) || add_func_diff!(∂m, func)
+        islowered(func) || add_func_diff!(∂m, func)
     end
     ReverseDiffExpressions.propagate_var_tracked!(∂m.m)
     ∂m.m

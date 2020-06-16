@@ -1,31 +1,29 @@
 
-
-# struct Dimensions
-    # sizehints::Vector{Int}
-    # sizeexact::Vector{Bool}
-# end
-
 mutable struct Variable
     varid::Int # 0 is target, 1 is One()
     name::Symbol
     parentfuncs::Vector{Int}#id of Func creating it.
     useids::Vector{Int}#ids of Funcs that use it.
+    paireddeps::Vector{Int}
     tracked::Bool
-    initialized::Bool
+    lowered_count::Int
+    # initialized::Bool
     ref::Any
     # function Variable(name::Symbol, id::Int)
         # new(id, name, 0, Int[], false, true)
     # end
     function Variable(name::Symbol, id::Int)
-        new(id, name, Int[], Int[], false, true)
+        new(id, name, Int[], Int[], Int[], 0, true)
     end
 end
 # Base.ndims(d::Dimensions) = length(d.sizehints)
 # Base.ndims(v::Variable) = length(v.dims)
 # isscalar(v::Variable) = iszero(ndims(v))
 istracked(v::Variable) = v.tracked
-isinitialized(v::Variable) = v.initialized
+num_lowered(v::Variable) = v.lowered_count
+isinitialized(v::Variable) = num_lowered(v) == length(parents(v))
 LoopVectorization.name(v::Variable) = v.name
+identifier(v::Variable) = v.varid
 
 LoopVectorization.parents(v::Variable) = v.parentfuncs
 hasparent(v::Variable) = !iszero(parent(v))
@@ -35,6 +33,9 @@ isref(v::Variable) = isdefined(v, :ref)
 function Base.push!(x::Vector{Any}, v::Variable)
     isref(v) ? push!(x, v.ref) : push!(x, v.name)
 end
+# function Base.pushfirst!(x::Vector{Any}, v::Variable)
+#     isref(v) ? pushfirst!(x, v.ref) : pushfirst!(x, v.name)
+# end
 
 # function Base.hash(v::Variable, u::UInt)
 

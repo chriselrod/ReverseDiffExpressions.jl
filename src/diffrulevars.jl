@@ -33,7 +33,6 @@ function add_section!(∂m::∂Model, drv::DiffRuleVariable, sectionid::Int)
             if (vars[sectionid - num_parents(diffrule) - 3]).tracked
                 ret = returns[sectionid + str - 1]
             else
-                # @show vars[sectionid - num_parents(diffrule) - 3]
                 return
             end
         end
@@ -48,7 +47,7 @@ function add_section!(∂m::∂Model, drv::DiffRuleVariable, sectionid::Int)
             if isone(sectionid)
                 retv = getvar!(∂m, ∂m.mold.vars[funcold.output[]])
             else
-                parent = vars[sectionid - num_parents(diffrule) - 1]
+                parent = vars[sectionid - num_parents(diffrule) - 3]
                 retv = getvar!(∂m.m, diffsym(name(parent)))
             end
         else
@@ -56,6 +55,7 @@ function add_section!(∂m::∂Model, drv::DiffRuleVariable, sectionid::Int)
         end
         retv.tracked = true
         returns!(func, retv)
+        retold = ∂m.mold.vars[funcold.output[]]
         addfunc!(∂m.m, func)
     end
 end
@@ -115,6 +115,7 @@ function add_view_diff!(∂m::∂Model, func::Func)
     returns!(gi_forward, retvf)
     retvr = getvar!(∂m.m, diffsym(name(retv))); retvr.tracked = true
     returns!(gi_reverse, retvr)
+    push!(inputvr.paireddeps, identifier(retvr))
     addfunc!(∂m.m, gi_forward)
     addfunc!(∂m.m, gi_reverse)
     nothing
@@ -133,11 +134,11 @@ function add_probdist_diff!(∂m::∂Model, func::Func)
     getconstindex!(∂m.m, ∂m.m.vars[0], tup, 1)
     ∂tup = addvar!(∂m.m, gensym(:∂tup))
     getconstindex!(∂m.m, ∂tup, tup, 2)
-    for i ∈ parents(func)
+    for (ind,i) ∈ enumerate(parents(func))
         p = moldvars[i]
         if istracked(p)
             retv = getvar!(∂m.m, diffsym(name(p))); retv.tracked = true
-            getconstindex!(∂m.m, retv, ∂tup, i)
+            getconstindex!(∂m.m, retv, ∂tup, ind)
         end
     end
 end
@@ -159,6 +160,10 @@ function add_constrain_diff!(∂m::∂Model, funcold::Func)
     constrain_reverse = Func(Instruction(:constrain_reverse!), false)
     uses!(constrain_reverse, ∂retv)
     uses!(constrain_reverse, drvc.vars[-1])
+    nothingvar = addvar!(∂m.m, gensym(:nothing))
+    returns!(constrain_reverse, nothingvar)
+    push!(∂m.m.targets, identifier(nothingvar))
+    addfunc!(∂m.m, constrain_reverse)
     nothing
 end
 function add_no_diff!(∂m::∂Model, funcold::Func)

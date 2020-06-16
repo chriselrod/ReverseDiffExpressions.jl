@@ -43,8 +43,9 @@ end
 
 reset_funclowered!(m::Model) = foreach(f -> (f.lowered[] = false), m.funcs)
 function reset_varinitialized!(m::Model)
-    foreach(v -> (v.initialized = isref(v)), m.vars)
-    foreach(v -> initialize_var!(m, v), m.inputvars)
+    foreach(m.vars) do v
+        v.lowered_count = 0
+    end
 end
 reset_var_tracked!(m::Model) = foreach(v -> (v.tracked = false), m.vars)
 onevar(m::Model) = @inbounds m.vars[1]
@@ -131,6 +132,7 @@ function addfunc!(m::Model, f::Func)
     end
     ret = m.vars[m.funcs[fid].output[]]
     push!(parents(ret), fid)
+    @assert !any(in(f.output[]), f.vparents)
     ret
 end
 
@@ -170,4 +172,14 @@ function getconstindex!(m::Model, vout::Variable, vin::Variable, index::Int)
     addfunc!(m, func)
     func
 end
+
+function nonindex_parent(m::Model, func::Func)
+    if isindexfunc(func)
+        parent = getvar(m, first(parents(func)))
+        nonindex_parent(m, getfunc(m, first(parents(parent))))
+    else
+        func
+    end
+end
+
 

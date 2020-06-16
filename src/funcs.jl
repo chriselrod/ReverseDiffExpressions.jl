@@ -24,18 +24,15 @@ end
 Base.isequal(f1::Func, f2::Func) = f1.instr == f2.instr && f1.vparents == f2.vparents
 
 function uses!(f::Func, v::Variable)
-    # push!(v.useids, f.funcid)
     push!(parents(f), v.varid)
     v
 end
 function returns!(f::Func, v::Variable)
     @assert name(v) != Symbol("##TARGET####BAR##")
     f.output[] = v.varid
-    # push!(parents(v), f)
-    v.initialized = false
     v
 end
-lowered(f::Func) = f.lowered[]
+islowered(f::Func) = f.lowered[]
 LoopVectorization.parents(f::Func) = f.vparents
 LoopVectorization.instruction(f::Func) = f.instr
 ReverseDiffExpressionsBase.InstructionArgs(f::Func) = InstructionArgs(instruction(f), length(parents(f)))
@@ -44,6 +41,13 @@ stackpointercall_expr(mod) = Expr(:(.), Expr(:(.), mod, QuoteNode(:ReverseDiffEx
 
 function isindexfunc(func::Func)
     func.instr.instr === :view || func.instr.instr === :getindex || func.instr.instr ∈ (:first, :second, :third, :fourth, :fifth, :sixth, :seventh, :eigth, :ninth, :last)
+end
+
+function isconstrainttransform(func::Func)
+    (func.instr.instr === :constrain) || (func.instr.instr === :constrain_pullback!)
+end
+function notupdating(func::Func)
+    func ∉ keys(ReverseDiffExpressionsBase.MAKEUPDATING)
 end
 
 # function getconstindex!(m::Model, index::Integer, vin::Variable)
