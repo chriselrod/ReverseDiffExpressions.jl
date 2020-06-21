@@ -18,6 +18,7 @@ function lower!(q::Expr, m::Model)
     reset_funclowered!(m)
     reset_varinitialized!(m)
     foreach(t -> lower!(q, m, vars[t]), Iterators.reverse(m.targets))
+    push!(q.args, Symbol("##TARGET##"))
     q
 end
 

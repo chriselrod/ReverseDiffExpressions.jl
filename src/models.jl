@@ -7,7 +7,7 @@ struct Model
     mod::Module
     modsym::Symbol
     funcdict::Dict{Func,Int}
-    inputvars::Vector{Int}
+    # inputvars::Vector{Int}
     varid::Ref{UInt}
     tracked::Vector{Bool}
     gradmodel::Bool
@@ -16,10 +16,9 @@ struct Model
     function Model(mod::Module = ReverseDiffExpressions, gradmodel::Bool = false)
         target = Variable(Symbol("##TARGET##"), 0); target.tracked = true
         ein = Variable(Symbol("##ONE##"), 1)
-        new(OffsetVector(Variable[target, ein], -1), Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}(), Int[], Ref(UInt(2)), Bool[], gradmodel, [0])
+        new(OffsetVector(Variable[target, ein], -1), Func[], LoopSet[], Dict{Symbol,Int}(), mod, Symbol(mod), Dict{Func,Int}(), Ref(UInt(2)), Bool[], gradmodel, [0])
     end
 end
-
 # struct DiffRuleVarFunc
     # diffrule::DiffRule
     # func::Func
