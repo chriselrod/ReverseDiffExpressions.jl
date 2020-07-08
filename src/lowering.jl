@@ -18,7 +18,7 @@ function lower!(q::Expr, m::Model)
     reset_funclowered!(m)
     reset_varinitialized!(m)
     foreach(t -> lower!(q, m, vars[t]), Iterators.reverse(m.targets))
-    push!(q.args, Symbol("##TARGET##"))
+    push!(q.args, Expr(:call, (:vsum), Symbol("##TARGET##")))
     q
 end
 
@@ -121,7 +121,8 @@ function probdist_call(m::Model, func::Func, retvar::Variable)
     funcupdating = m.gradmodel
     f = funcupdating ? :∂logdensity! : :logdensity
     @unpack vars, funcs = m
-    dist = Expr(:call, Expr(:curly, func.instr.instr, Expr(:curly, :Tuple, map(id -> istracked(vars[id]), parents(func))...)))
+    disttup = Expr(:tuple); append!(disttup.args, map(id -> istracked(vars[id]), parents(func)))
+    dist = Expr(:call, Expr(:curly, func.instr.instr, disttup))
     call = Expr(:call, Expr(:(.), :ReverseDiffExpressions, QuoteNode(:stack_pointer_call)), f, STACK_POINTER_NAME)
     push!(call.args, dist)
     call
@@ -197,7 +198,7 @@ function lower!(q::Expr, m::Model, func::Func, retvar::Variable, check_paireddep
     retvarid = func.output[]
     ret = Expr(:tuple, STACK_POINTER_NAME)
     call = Expr(:(=), ret, call)
-    push!(q.args, call)
+    push!(q.args, cal)
     if retvarid ≥ 0
         lowernum = num_lowered(retvar)
         retname = return_name(retvar, lowernum)
@@ -220,7 +221,9 @@ function lower!(q::Expr, m::Model, func::Func, retvar::Variable, check_paireddep
                 lower_paired_deps!(q, m, varout)
             end
         end
-        # @assert false
+    elseif func.probdistapi && funcupdating
+        
+        # Need to force lowering of 
     end
     nothing
 end

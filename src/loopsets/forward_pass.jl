@@ -1,5 +1,5 @@
 
-function first_pass!(∂ls::∂LoopSet)
+function forward_pass!(∂ls::∂LoopSet)
     for i ∈ ∂ls.opsparentsfirst
         add_forward_operation!(∂ls, i)
     end
@@ -40,7 +40,7 @@ function add_compute_untracked!(∂ls::∂LoopSet, i::Int)
     newops = operations(fls)
     vparents = [newops[identifier(opp)] for opp ∈ parents(opold)]
     newops[i] = Operation(
-        i - 1, name(opold), 8, instruction(opold), compute, loopdependencies(opold), reduceddependencies(oldold), vparents, NOTAREFERENCE, reducedchildren(opold)
+        i - 1, name(opold), 8, instruction(opold), compute, loopdependencies(opold), reduceddependencies(opold), vparents, NOTAREFERENCE, reducedchildren(opold)
     )
     nothing
 end
@@ -62,7 +62,7 @@ function add_compute!(∂ls::∂LoopSet, i::Int)
 
         loopdeps, reduceddeps, reducedc = determine_dependencies_forward(oldop, dro, j)
         op = Operation(
-            length(newops), name(op), 8, instrⱼ, compute, loopdeps, reduceddeps, parentsⱼ, NOTAREFERENCE, reducedc
+            length(newops), name(oldop), 8, instrⱼ, compute, loopdeps, reduceddeps, parentsⱼ, NOTAREFERENCE, reducedc
         )
         if j == retind
             op.identifier = identifier(oldop)
@@ -88,11 +88,10 @@ function combinedeps!(f, totalloopdeps::AbstractVector{T}, opdeps, drops) where 
 end
 
 function determine_dependencies_forward(oldop, dro, j)
-    @unpack lsold = ∂ls
     loopdeps = loopdependencies(oldop);
     reduceddeps = reduceddependencies(oldop);
     reducedc = reducedchildren(oldop);
-    length(section) == 1 && return loopdeps, reduceddeps, reducedc
+    isone(length(section(dro,j))) && return loopdeps, reduceddeps, reducedc
 
     drops = operations(dro)
     instrⱼ, instrdepsⱼ = dro[j]

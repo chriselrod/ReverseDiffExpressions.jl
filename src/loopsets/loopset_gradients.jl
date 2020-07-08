@@ -1,16 +1,19 @@
 # using much of the name space of LoopVectorization; seems more organized to set it aside.
 module LoopSetDerivatives
 
-using ..ReverseDiffExpressions: Model
+using ..ReverseDiffExpressions: Model, diffsym
 
 using ReverseDiffExpressionsBase, LoopVectorization, UnPack, OffsetArrays
-using ReverseDiffExpressionsBase: DiffRule
+using ReverseDiffExpressionsBase: DiffRule, InstructionArgs, DERIVATIVERULES
 using LoopVectorization:
     LoopSet, operations, isload, iscompute, isstore, isconstant,
-    constant, memload, compute, memstore,
+    constant, memload, compute, memstore, instruction,
     loopdependencies, reduceddependencies, reducedchildren,
-    vptr, name, lower, parents,
-    Operation, add_op!, ArrayReferenceMeta
+    vptr, name, lower, parents, identifier,
+    Operation,
+    add_op!, add_load!, add_store!,
+    ArrayReferenceMeta, ArrayReference,
+    NOPARENTS, NOTAREFERENCE, NODEPENDENCY
     
 
 include("diffrule_operation.jl")
@@ -27,22 +30,23 @@ struct ∂LoopSet
     stored_ops::Vector{Int}
     opsparentsfirst::Vector{Int}
     temparrays::Vector{ArrayReferenceMeta}
-    model::Model
+    # model::Model
 end
 
 function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
     append!(lsdest.preamble.args, lssrc.preamble.args)
+    append!(lsdest.prepreamble.args, lssrc.prepreamble.args)
     append!(lsdest.syms_aliasing_refs, lssrc.syms_aliasing_refs)
     append!(lsdest.refs_aliasing_syms, lssrc.refs_aliasing_syms)
     append!(lsdest.preamble_symsym, lssrc.preamble_symsym)
     append!(lsdest.preamble_symint, lssrc.preamble_symint)
     append!(lsdest.preamble_symfloat, lssrc.preamble_symfloat)
     append!(lsdest.preamble_zeros, lssrc.preamble_zeros)
-    append!(lsdest.preamble_ones, lssrc.preamble_ones)
+    append!(lsdest.preamble_funcofeltypes, lssrc.preamble_funcofeltypes)
     append!(lsdest.includedarrays, lssrc.includedarrays)
     nothing
 end
-function ∂LoopSet_init(lsold::LoopSet, m::Model)
+function ∂LoopSet_init(lsold::LoopSet)
     mod = lsold.mod; nops = length(operations(lsold))
     ∂LoopSet(
         LoopSet(mod), LoopSet(mod), lsold,
@@ -52,17 +56,17 @@ function ∂LoopSet_init(lsold::LoopSet, m::Model)
         # sizehint!(DiffRuleOperation[], nops),
         Vector{DiffRuleOperation}(undef, nops),
         fill(-1, nops), sizehint!(Int[], nops),
-        ArrayReferenceMeta[], m
+        ArrayReferenceMeta[]
     )
 end
-function ∂LoopSet(lsold::LoopSet, m::Model)
+function ∂LoopSet(lsold::LoopSet, tracked_vars)
     nops = length(operations(lsold))
-    ∂ls = ∂LoopSet_init(lsold, m)
+    ∂ls = ∂LoopSet_init(lsold)
     resize!(∂ls.fls.operations, nops)
-    copymeta!(∂ls.fls, ls)
+    copymeta!(∂ls.fls, lsold)
     determine_parents_first_order!(∂ls)
     determine_stored_computations!(∂ls)
-    update_tracked!(∂ls)
+    update_tracked!(∂ls, tracked_vars)
     forward_pass!(∂ls)
     reverse_pass!(∂ls)
     ∂ls
@@ -90,7 +94,7 @@ function append_parent_ids_first!(opsparentsfirst, visited, op)
     visited[identifier(op)] = true
     return
 end
-function determine_parents_first_order!(opsparentsfirst::Vector{Int}, visited::Vector{Operation}, ops::Vector{Operation})
+function determine_parents_first_order!(opsparentsfirst::Vector{Int}, visited::Vector{Bool}, ops::Vector{Operation})
     for op ∈ ops
         append_parent_ids_first!(opsparentsfirst, visited, op)
     end
@@ -116,17 +120,21 @@ end
 
 function istracked(op::Operation, tracked_ops::Vector{Bool}, tracked_vars::Set{Symbol})
     for opp ∈ parents(op)
-        (tracked_ops[identifier(opp)] || name(opp) ∈ tracked_vars) && return true
+        if tracked_ops[identifier(opp)]
+            return true
+        elseif isload(opp) && opp.ref.ref.array ∈ tracked_vars
+            return true
+        end
     end
     false
 end
-function update_tracked!(∂ls::∂LoopSet)
-    @unpack lsold, tracked_vars, tracked_ops, visited_ops, opsparentsfirst, vartracker = ∂ls
+function update_tracked!(∂ls::∂LoopSet, tracked_vars)
+    @unpack lsold, tracked_ops, visited_ops, opsparentsfirst = ∂ls
     fill!(visited_ops, false)
     ops = operations(lsold)
-    for i ∈ lsold.outter_reductions
+    for i ∈ lsold.outer_reductions
         tracked_ops[i] = true
-        track!(vartracker, name(ops[i]))
+        # track!(vartracker, name(ops[i]))
         # push!(tracked_vars
     end
     for i ∈ opsparentsfirst

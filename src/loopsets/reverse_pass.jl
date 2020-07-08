@@ -1,12 +1,13 @@
 
 function reverse_pass!(∂ls::∂LoopSet)
     N = length(∂ls.opsparentsfirst)
-    for i ∈ ∂ls.ls.outer_reductions
-        tracked_ops[i] && add_reverse_operation!(∂ls, i)
+    @show ∂ls.opsparentsfirst
+    for i ∈ ∂ls.lsold.outer_reductions
+        ∂ls.tracked_ops[i] && add_reverse_operation!(∂ls, i)
     end
     for n ∈ 0:N-1
         i = ∂ls.opsparentsfirst[N - n]
-        tracked_ops[i] && add_reverse_operation!(∂ls, i)
+        ∂ls.tracked_ops[i] && add_reverse_operation!(∂ls, i)
     end
 end
 
@@ -14,7 +15,7 @@ function add_reverse_operation!(∂ls::∂LoopSet, i::Int)
     @unpack fls, lsold = ∂ls
     ops = operations(lsold)
     op = ops[i]
-    
+    @show op
     if isload(op)
         add_load_reverse!(∂ls, i)
         # if istracked(∂ls, op)
@@ -26,7 +27,7 @@ function add_reverse_operation!(∂ls::∂LoopSet, i::Int)
         #     # backlogged store; wait until it has a parent to add
         #     ∂newops[i] = ∂op
         # end
-    elseif iscompute(op) && !isreductcombineinstr(instruction(op))
+    elseif iscompute(op) && !isreductcombineinstr(op)
         add_compute_reverse!(∂ls, i)
     elseif isstore(op)
         add_store_reverse!(∂ls, i)
@@ -46,14 +47,13 @@ function add_reverse_operation!(∂ls::∂LoopSet, i::Int)
 end
 
 function adjref(ref::ArrayReferenceMeta)
-    ArrayReferenceMeta(
-        ArrayReference(adj(ref.array), ref.indices), ref.loopedindex
-    )
+    LoopVectorization.ArrayReferenceMeta(LoopVectorization.ArrayReference(diffsym(ref.ref.array), ref.ref.indices), ref.loopedindex)
 end
 adjref(op::Operation) = adjref(op.ref)
 
+isreductcombineinstr(op::Operation) = op.instruction.instr === :identity
 function add_reverse_input!(ropsargs::Vector{Vector{Operation}}, opold::Operation, opnew::Operation)
-    if isreductcombineinstr(opold)
+    if isreductcombineinstr(opold) # changed how this is handled...
         add_reverse_input_parent!(ropsargs, opold, opnew, 1)
     else
         push!(ropsargs[identifier(opold)], opnew)
@@ -76,7 +76,7 @@ function add_load_reverse!(∂ls::∂LoopSet, i::Int)
     ref = adjref(opold)
     vparents = [get_adj_input_op!(∂ls, i)]
     opnew = Operation(
-        length(rops), adj(name(opold)), 8, :setindex!, memstore, loopdependencies(opold), NODEPENDENCY, vparents, ref
+        length(rops), diffsym(name(opold)), 8, :setindex!, memstore, loopdependencies(opold), NODEPENDENCY, vparents, ref
     )
     add_store!(rls, opnew)
     nothing
@@ -89,7 +89,7 @@ function add_store_reverse!(∂ls::∂LoopSet, i::Int)
     rops = operations(rls)
     ref = adjref(opold)
     opnew = Operation(
-        length(rops), adj(name(opold)), 8, :getindex, memload, loopdependencies(opold), NODEPENDENCY, NOPARENTS, ref, NODEPENDENCY
+        length(rops), diffsym(name(opold)), 8, :getindex, memload, loopdependencies(opold), NODEPENDENCY, NOPARENTS, ref, NODEPENDENCY
     )
     # push!(rops, opnew)
     add_load!(rls, opnew)
@@ -245,12 +245,13 @@ function get_adj_input_op_expand!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
 end
 
 function update_store_tracker!(∂ls::∂LoopSet, i::Int, oldop::Operation)
-    @unpack model, ropsargs, tracked_ops, rls = ∂ls
-    adjarrayname = adj(name(oldop.ref))
-    if !isdefined(model, adjarrayname)
-        define!(model, adjarrayname)
-        return
-    end
+    @unpack ropsargs, tracked_ops, rls = ∂ls
+    adjarrayname = diffsym(name(oldop.ref))
+    # @unpack model, ropsargs, tracked_ops, rls = ∂ls
+    # if !isdefined(model, adjarrayname)
+    #     define!(model, adjarrayname)
+    #     return
+    # end
     # adjarrayname is already defined, but now we load from it.
     loadadj = Operation(
         i - 1, gensym(:adjointload), 8, :getindex, memload, loopdependencies(oldop), reduceddependencies(oldop), NOPARENTS, adjref(oldop), reducedchildren(oldop)
@@ -272,6 +273,8 @@ function get_adj_input_op!(∂ls::∂LoopSet, i::Int)
     ndeps = length(oldop_ld)
     # This function must compute reduction
     ropsargsᵢ = ropsargs[i]
+    @show rls.operations
+    @show ropsargs oldop ropsargsᵢ, i
     if maximum(length ∘ loopdependencies, ropsargsᵢ) > ndeps
         get_adj_input_op_reduct!(∂ls, ropsargsᵢ, i)
     elseif minimum(length ∘ loopdependencies, ropsargsᵢ) < ndeps
@@ -326,8 +329,8 @@ function add_compute_reverse!(∂ls::∂LoopSet, i::Int)
     @unpack rls, lsold, ropsargs, diffops = ∂ls
     oldop = operations(lsold)[i]
     rops = operations(rls)
-
     dro = diffops[i]
+    @show i, dro
     retinds = returned_inds(dro)
     # dro 0 can now be filled in
     sects = sections(dro)
