@@ -198,7 +198,7 @@ function lower!(q::Expr, m::Model, func::Func, retvar::Variable, check_paireddep
     retvarid = func.output[]
     ret = Expr(:tuple, STACK_POINTER_NAME)
     call = Expr(:(=), ret, call)
-    push!(q.args, cal)
+    push!(q.args, call)
     if retvarid ≥ 0
         lowernum = num_lowered(retvar)
         retname = return_name(retvar, lowernum)
