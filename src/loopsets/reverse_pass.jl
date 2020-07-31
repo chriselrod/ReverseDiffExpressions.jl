@@ -1,7 +1,7 @@
 
 function reverse_pass!(∂ls::∂LoopSet)
     N = length(∂ls.opsparentsfirst)
-    @show ∂ls.opsparentsfirst
+    # @show ∂ls.opsparentsfirst
     for i ∈ ∂ls.lsold.outer_reductions
         ∂ls.tracked_ops[i] && add_reverse_operation!(∂ls, i)
     end
@@ -15,7 +15,7 @@ function add_reverse_operation!(∂ls::∂LoopSet, i::Int)
     @unpack fls, lsold = ∂ls
     ops = operations(lsold)
     op = ops[i]
-    @show op
+    # @show op
     if isload(op)
         add_load_reverse!(∂ls, i)
         # if istracked(∂ls, op)
@@ -109,10 +109,10 @@ function make_updating_failed!(op₁::Operation, op₂::Operation)
         parents(op₁)[2] = op₂
         return false       
     end
-    updateinstr = get(MAKEUPDATING, instr, nothing)
+    updateinstr = get(ReverseDiffExpressionsBase.MAKEUPDATING, instr, nothing)
     updateinstr === nothing && return true
     op₁.instruction = updateinstr
-    push!(parents(op₁), op₂)
+    pushfirst!(parents(op₁), op₂)
     false
 end
 function make_updating!(ls::LoopSet, op₁::Operation, op₂::Operation, loopdeps = loopdependencies(op₂))
@@ -195,8 +195,8 @@ function get_adj_input_op_reduct!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
     loopdeps = loopdependencies(oldop)
     # We need a simple reduce_to target, shareable by all reductions
     mCt = gensym(:targetzero)
-    targetzero = add_constant!(ls, gensym(:targetzero), loopdes, mCt, 8, :numericconstant)
-    push!(ls.preamble_zeros, (identifier(targetzero), LoopVectorization.IntOrFloat))
+    targetzero = LoopVectorization.add_constant!(rls, gensym(:targetzero), loopdeps, mCt, 8, :numericconstant)
+    push!(rls.preamble_zeros, (identifier(targetzero), LoopVectorization.IntOrFloat))
     isouterreduction = length(loopdeps) == 0
     # And a reduction-specific zero init
     for j ∈ eachindex(ropsargsᵢ)
@@ -208,14 +208,16 @@ function get_adj_input_op_reduct!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
         # [x] 1. make ropⱼ a reduction, adding across the reducedc loops
         # [x] 2. Create a reduction zero initializer
         # [x] 3. Create a reduction finalizer (i.e., reduced_/reduce_to)
-        reductinit = add_constant!(rls, gensym(:reductzero), loopdeps, name(ropⱼ), 8, :numericconstant)
+        append!(reduceddependencies(ropⱼ), reducedc)
+        reductinit = LoopVectorization.add_constant!(rls, gensym(:reductzero), loopdeps, name(ropⱼ), 8, :numericconstant)
         reductinit.reduced_children = reducedc
         opcomb = make_updating!(rls, ropⱼ, reductinit)
         if isouterreduction
             push!(rls.outer_reductions, identifier(opcomb))
             ropsargsᵢ[j] = opcomb
         else
-            ropⱼr = Operation(length(operations(rls)), gensym(:reduct), elementbytes, :reduce_to_add, compute, loopdeps, reducedc, [opcomb, targetzero])
+            # ropⱼr = Operation(length(operations(rls)), gensym(:reduct), 8, :reduce_to_add, compute, loopdeps, reducedc, [opcomb, targetzero])
+            ropⱼr = Operation(length(operations(rls)), gensym(:reduct), 8, :identity, compute, loopdeps, reducedc, [opcomb])
             push!(operations(rls), ropⱼr)
             ropsargsᵢ[j] = ropⱼr
         end
@@ -253,9 +255,7 @@ function update_store_tracker!(∂ls::∂LoopSet, i::Int, oldop::Operation)
     #     return
     # end
     # adjarrayname is already defined, but now we load from it.
-    loadadj = Operation(
-        i - 1, gensym(:adjointload), 8, :getindex, memload, loopdependencies(oldop), reduceddependencies(oldop), NOPARENTS, adjref(oldop), reducedchildren(oldop)
-    )
+    loadadj = Operation(length(operations(rls)), gensym(:adjointload), 8, :getindex, memload, loopdependencies(oldop), reduceddependencies(oldop), NOPARENTS, adjref(oldop), reducedchildren(oldop))
     push!(ropsargs[i], loadadj)
     add_load!(rls, loadadj)
     nothing
@@ -273,8 +273,8 @@ function get_adj_input_op!(∂ls::∂LoopSet, i::Int)
     ndeps = length(oldop_ld)
     # This function must compute reduction
     ropsargsᵢ = ropsargs[i]
-    @show rls.operations
-    @show ropsargs oldop ropsargsᵢ, i
+    # @show rls.operations
+    # @show ropsargs oldop ropsargsᵢ, i
     if maximum(length ∘ loopdependencies, ropsargsᵢ) > ndeps
         get_adj_input_op_reduct!(∂ls, ropsargsᵢ, i)
     elseif minimum(length ∘ loopdependencies, ropsargsᵢ) < ndeps
@@ -296,13 +296,16 @@ function get_op_from_deriv_op_vec!(∂ls::∂LoopSet, dro::DiffRuleOperation, de
     drops = operations(dro)
     fls_boundary = first(sects[2])
     dop = drops[dep]
-    if dep != 0 && dep < fls_boundary
+    if !iszero(dep) && dep < fls_boundary
         # Then we need to check if the operation has been stored. If not, we must add a store to the previous loop.
         dopid = identifier(dop)
         storeid = ∂ls.stored_ops[dopid]
-        if storeid == -1
-            ldref = loopdependencies(dop)
-            storeop = add_simple_store!(fls, dop, ArrayReference(gensym(:temporaryarray),ldref), 8)
+        # @show storeid dop
+        ldref = loopdependencies(dop)
+        if isload(dop)
+            mref = dop.ref
+        elseif storeid == -1
+            storeop = LoopVectorization.add_simple_store!(fls, dop, ArrayReference(gensym(:temporaryarray),ldref), 8)
             mref = storeop.ref
             push!(∂ls.temparrays, storeop.ref)
             storeid = identifier(storeop)
@@ -311,7 +314,7 @@ function get_op_from_deriv_op_vec!(∂ls::∂LoopSet, dro::DiffRuleOperation, de
             mref = operations(fls)[storeid].ref
         end
         # Then we must cse-load it.
-        dop = add_load!(rls, name(dop), mref, 8)
+        dop = LoopVectorization.add_simple_load!(rls, name(dop), mref, ldref, 8)
     end
     dop
 end
@@ -319,9 +322,10 @@ function mergedeps(ops::Vector{Operation})
     ldref = copy(loopdependencies(first(ops)))
     rdref = copy(reduceddependencies(first(ops)))
     for op ∈ @view(ops[2:end])
-        mergesetv!(ldref, loopdependencies(op))
-        mergesetv!(rdref, reduceddependencies(op))
+        LoopVectorization.mergesetv!(ldref, loopdependencies(op))
+        LoopVectorization.mergesetv!(rdref, reduceddependencies(op))
     end
+    ldref, rdref
 end
 
 function add_compute_reverse!(∂ls::∂LoopSet, i::Int)
@@ -330,7 +334,7 @@ function add_compute_reverse!(∂ls::∂LoopSet, i::Int)
     oldop = operations(lsold)[i]
     rops = operations(rls)
     dro = diffops[i]
-    @show i, dro
+    # @show i, dro
     retinds = returned_inds(dro)
     # dro 0 can now be filled in
     sects = sections(dro)
@@ -338,10 +342,14 @@ function add_compute_reverse!(∂ls::∂LoopSet, i::Int)
     nargs = length(sects) - 2
     drops = operations(dro)
     drops[0] = get_adj_input_op!(∂ls, i)
+    # @show rops
     for k ∈ 2:length(sects)
-        (k > 2 && !istracked(∂ls, dro[k - 3 - nargs])) && continue
+        # check if the final return of the section is tracked, if not, continue
+        # k > 2 && @show drops[k - nargs - 3]
+        (k > 2 && !istracked(∂ls, drops[k - nargs - 3])) && continue
         for j ∈ sects[k]
             instrⱼ, depsⱼ = dro[j]
+            # @show j, instrⱼ, depsⱼ
             if instrⱼ === :adjoint
                 drops[j] = drops[first(depsⱼ)]
                 continue
@@ -352,11 +360,11 @@ function add_compute_reverse!(∂ls::∂LoopSet, i::Int)
             end
             ldref, rdref = mergedeps(parentsⱼ)
             op = Operation(length(rops), gensym(:reverseop), 8, instrⱼ, compute, ldref, rdref, parentsⱼ)
-            drops[j] = pushop!(rls, op)
+            drops[j] = LoopVectorization.pushop!(rls, op)
         end
         if k > 2
             # We have to get_op_from_deriv_op_vec, because the return may have been computed in the first pass; e.g. exp
-            add_reverse_input_parent!(ropsargs, oldop, get_op_from_deriv_op_vec!(∂ls, dro, retinds[k-1]), i)
+            add_reverse_input_parent!(ropsargs, oldop, get_op_from_deriv_op_vec!(∂ls, dro, retinds[k-1]), k-2)
         end
     end
 end

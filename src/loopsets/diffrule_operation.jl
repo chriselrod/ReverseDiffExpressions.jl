@@ -37,6 +37,7 @@ dependencies(dro::DiffRuleOperation) = dro.diffrule.dependencies
 dependencies(dro::DiffRuleOperation, i::Int) = dro.diffrule.dependencies[i]
 
 function Base.getindex(dro::DiffRuleOperation, i::Int)
+    # i -= first(dro.operations.offsets)
     instruction(dro, i), dependencies(dro, i)
 end
 

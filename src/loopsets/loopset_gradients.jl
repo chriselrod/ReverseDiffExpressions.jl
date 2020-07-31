@@ -32,7 +32,10 @@ struct ∂LoopSet
     temparrays::Vector{ArrayReferenceMeta}
     # model::Model
 end
-
+function copyloopmeta!(lsdest::LoopSet, lssrc::LoopSet)
+    append!(lsdest.loopsymbols, lssrc.loopsymbols)
+    append!(lsdest.loops, lssrc.loops)
+end
 function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
     append!(lsdest.preamble.args, lssrc.preamble.args)
     append!(lsdest.prepreamble.args, lssrc.prepreamble.args)
@@ -44,6 +47,7 @@ function copymeta!(lsdest::LoopSet, lssrc::LoopSet)
     append!(lsdest.preamble_zeros, lssrc.preamble_zeros)
     append!(lsdest.preamble_funcofeltypes, lssrc.preamble_funcofeltypes)
     append!(lsdest.includedarrays, lssrc.includedarrays)
+    copyloopmeta!(lsdest, lssrc)
     nothing
 end
 function ∂LoopSet_init(lsold::LoopSet)
@@ -64,6 +68,7 @@ function ∂LoopSet(lsold::LoopSet, tracked_vars)
     ∂ls = ∂LoopSet_init(lsold)
     resize!(∂ls.fls.operations, nops)
     copymeta!(∂ls.fls, lsold)
+    copyloopmeta!(∂ls.rls, lsold)
     determine_parents_first_order!(∂ls)
     determine_stored_computations!(∂ls)
     update_tracked!(∂ls, tracked_vars)
@@ -118,15 +123,11 @@ function determine_stored_computations!(∂ls::∂LoopSet)
     end
 end
 
+
 function istracked(op::Operation, tracked_ops::Vector{Bool}, tracked_vars::Set{Symbol})
-    for opp ∈ parents(op)
-        if tracked_ops[identifier(opp)]
-            return true
-        elseif isload(opp) && opp.ref.ref.array ∈ tracked_vars
-            return true
-        end
-    end
-    false
+    tracked_ops[identifier(op)] && return true
+    (isload(op) && op.ref.ref.array ∈ tracked_vars) && return true
+    any(opp -> istracked(opp, tracked_ops, tracked_vars), parents(op))
 end
 function update_tracked!(∂ls::∂LoopSet, tracked_vars)
     @unpack lsold, tracked_ops, visited_ops, opsparentsfirst = ∂ls

@@ -58,6 +58,7 @@ function add_compute!(∂ls::∂LoopSet, i::Int)
     @assert retind ∈ forward_section # For now
     for j ∈ forward_section
         instrⱼ, depsⱼ = dro[j]
+        # @show instrⱼ, depsⱼ, axes(drops,1) drops
         parentsⱼ = drops[depsⱼ]
 
         loopdeps, reduceddeps, reducedc = determine_dependencies_forward(oldop, dro, j)
@@ -65,7 +66,9 @@ function add_compute!(∂ls::∂LoopSet, i::Int)
             length(newops), name(oldop), 8, instrⱼ, compute, loopdeps, reduceddeps, parentsⱼ, NOTAREFERENCE, reducedc
         )
         if j == retind
-            op.identifier = identifier(oldop)
+            # TODO setproperty! in a API-based rather than implementation-based mannger
+            # impementation is that op.identifier + 1 = index in array, while `identifier(op)` returns index into array
+            op.identifier = identifier(oldop) - 1
             newops[identifier(oldop)] = op
         else
             push!(newops, op)
