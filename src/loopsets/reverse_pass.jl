@@ -324,14 +324,15 @@ function get_op_from_deriv_op_vec!(∂ls::∂LoopSet, dro::DiffRuleOperation, de
         elseif isconstant(dop)
             constop = Operation(length(operations(rls)), name(dop), 8, instruction(dop), constant, loopdependencies(dop), reduceddependencies(dop), NOPARENTS, NOTAREFERENCE, reducedchildren(dop))
             dopid = identifier(dop)
+            constid = identifier(constop)
             if (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_symsym); !isnothing(id))
-                push!(rls.preamble_symsym, (dopid, last(lsold.preamble_symsym[id])))
+                push!(rls.preamble_symsym, (constid, last(lsold.preamble_symsym[id])))
             elseif (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_symint); !isnothing(id))
-                push!(rls.preamble_symint, (dopid, last(lsold.preamble_symint[id])))
+                push!(rls.preamble_symint, (constid, last(lsold.preamble_symint[id])))
             elseif (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_symfloat); !isnothing(id))
-                push!(rls.preamble_symfloat, (dopid, last(lsold.preamble_symfloat[id])))
+                push!(rls.preamble_symfloat, (constid, last(lsold.preamble_symfloat[id])))
             elseif (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_zeros); !isnothing(id))
-                push!(rls.preamble_zeros, (dopid, last(lsold.preamble_zeros[id])))
+                push!(rls.preamble_zeros, (constid, last(lsold.preamble_zeros[id])))
             else
                 @show dop
                 throw("Constant value not found.")
@@ -340,7 +341,8 @@ function get_op_from_deriv_op_vec!(∂ls::∂LoopSet, dro::DiffRuleOperation, de
         elseif storeid == -1
             storeop = LoopVectorization.add_simple_store!(fls, dop, ArrayReference(gensym(:temporaryarray),ldref), 8)
             mref = storeop.ref
-            push!(∂ls.temparrays, storeop.ref)
+            push!(∂ls.temparrays, mref)
+            LoopVectorization.maybeaddref!(fls, storeop)
             storeid = identifier(storeop)
             ∂ls.stored_ops[identifier(dop)] = storeid
         else
@@ -348,7 +350,7 @@ function get_op_from_deriv_op_vec!(∂ls::∂LoopSet, dro::DiffRuleOperation, de
         end
         # Then we must cse-load it.
         dop = LoopVectorization.add_simple_load!(rls, name(dop), mref, ldref, 8)
-        LoopVectorization.maybeaddref!(rls, dop, mref)
+        LoopVectorization.maybeaddref!(rls, dop)
     end
     dop
 end
