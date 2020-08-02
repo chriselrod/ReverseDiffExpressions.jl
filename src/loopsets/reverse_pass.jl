@@ -1,14 +1,29 @@
+#
+# ropsargs 
+# 
 
 function reverse_pass!(∂ls::∂LoopSet)
     N = length(∂ls.opsparentsfirst)
     # @show ∂ls.opsparentsfirst
+    # @show 5, ∂ls.ropsargs
     for i ∈ ∂ls.lsold.outer_reductions
-        ∂ls.tracked_ops[i] && add_reverse_operation!(∂ls, i)
+        if ∂ls.tracked_ops[i]
+            add_reverse_outer_reduct!(∂ls, i)
+        end
     end
+    # @show 11, ∂ls.ropsargs ∂ls.opsparentsfirst
     for n ∈ 0:N-1
         i = ∂ls.opsparentsfirst[N - n]
         ∂ls.tracked_ops[i] && add_reverse_operation!(∂ls, i)
     end
+end
+
+function add_reverse_outer_reduct!(∂ls::∂LoopSet, i::Int)
+    @unpack rls, lsold, ropsargs = ∂ls
+    oldop = operations(lsold)[i]
+    constop = LoopVectorization.add_constant!(rls, diffsym(name(oldop)), 8)
+    push!(ropsargs[i], constop)
+    nothing
 end
 
 function add_reverse_operation!(∂ls::∂LoopSet, i::Int)
@@ -16,6 +31,7 @@ function add_reverse_operation!(∂ls::∂LoopSet, i::Int)
     ops = operations(lsold)
     op = ops[i]
     # @show op
+    # @show 31, ∂ls.ropsargs, op
     if isload(op)
         add_load_reverse!(∂ls, i)
         # if istracked(∂ls, op)
@@ -43,7 +59,7 @@ function add_reverse_operation!(∂ls::∂LoopSet, i::Int)
     # else#if isconstant(op)
         # add_constant_reverse!(∂ls, i)
     end
-    
+    nothing
 end
 
 function adjref(ref::ArrayReferenceMeta)
@@ -194,10 +210,10 @@ function get_adj_input_op_reduct!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
     oldop = operations(lsold)[i]
     loopdeps = loopdependencies(oldop)
     # We need a simple reduce_to target, shareable by all reductions
-    mCt = gensym(:targetzero)
-    targetzero = LoopVectorization.add_constant!(rls, gensym(:targetzero), loopdeps, mCt, 8, :numericconstant)
-    push!(rls.preamble_zeros, (identifier(targetzero), LoopVectorization.IntOrFloat))
-    isouterreduction = length(loopdeps) == 0
+    # mCt = gensym(:targetzero)
+    # targetzero = LoopVectorization.add_constant!(rls, gensym(:targetzero), loopdeps, mCt, 8, :numericconstant)
+    # push!(rls.preamble_zeros, (identifier(targetzero), LoopVectorization.IntOrFloat))
+    isouterreduction = iszero(length(loopdeps))
     # And a reduction-specific zero init
     for j ∈ eachindex(ropsargsᵢ)
         ropⱼ = ropsargsᵢ[j]
@@ -210,6 +226,7 @@ function get_adj_input_op_reduct!(∂ls::∂LoopSet, ropsargsᵢ::Vector{Operati
         # [x] 3. Create a reduction finalizer (i.e., reduced_/reduce_to)
         append!(reduceddependencies(ropⱼ), reducedc)
         reductinit = LoopVectorization.add_constant!(rls, gensym(:reductzero), loopdeps, name(ropⱼ), 8, :numericconstant)
+        push!(rls.preamble_zeros, (identifier(reductinit), LoopVectorization.IntOrFloat))
         reductinit.reduced_children = reducedc
         opcomb = make_updating!(rls, ropⱼ, reductinit)
         if isouterreduction
@@ -304,6 +321,22 @@ function get_op_from_deriv_op_vec!(∂ls::∂LoopSet, dro::DiffRuleOperation, de
         ldref = loopdependencies(dop)
         if isload(dop)
             mref = dop.ref
+        elseif isconstant(dop)
+            constop = Operation(length(operations(rls)), name(dop), 8, instruction(dop), constant, loopdependencies(dop), reduceddependencies(dop), NOPARENTS, NOTAREFERENCE, reducedchildren(dop))
+            dopid = identifier(dop)
+            if (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_symsym); !isnothing(id))
+                push!(rls.preamble_symsym, (dopid, last(lsold.preamble_symsym[id])))
+            elseif (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_symint); !isnothing(id))
+                push!(rls.preamble_symint, (dopid, last(lsold.preamble_symint[id])))
+            elseif (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_symfloat); !isnothing(id))
+                push!(rls.preamble_symfloat, (dopid, last(lsold.preamble_symfloat[id])))
+            elseif (id = findfirst(ids -> first(ids) == dopid, lsold.preamble_zeros); !isnothing(id))
+                push!(rls.preamble_zeros, (dopid, last(lsold.preamble_zeros[id])))
+            else
+                @show dop
+                throw("Constant value not found.")
+            end
+            return LoopVectorization.pushop!(rls, constop)
         elseif storeid == -1
             storeop = LoopVectorization.add_simple_store!(fls, dop, ArrayReference(gensym(:temporaryarray),ldref), 8)
             mref = storeop.ref
@@ -315,6 +348,7 @@ function get_op_from_deriv_op_vec!(∂ls::∂LoopSet, dro::DiffRuleOperation, de
         end
         # Then we must cse-load it.
         dop = LoopVectorization.add_simple_load!(rls, name(dop), mref, ldref, 8)
+        LoopVectorization.maybeaddref!(rls, dop, mref)
     end
     dop
 end
@@ -342,7 +376,9 @@ function add_compute_reverse!(∂ls::∂LoopSet, i::Int)
     nargs = length(sects) - 2
     drops = operations(dro)
     drops[0] = get_adj_input_op!(∂ls, i)
+    # println("")
     # @show rops
+    # @show sects
     for k ∈ 2:length(sects)
         # check if the final return of the section is tracked, if not, continue
         # k > 2 && @show drops[k - nargs - 3]

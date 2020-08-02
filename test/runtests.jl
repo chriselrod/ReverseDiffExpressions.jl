@@ -10,12 +10,12 @@ using Test
                 C[m,n] += A[m,k] * B[k,n]
                 end
                 end);
+
     lsAmulB = LoopVectorization.LoopSet(AmulBq);
 
     tracked_vars = Set([:A, :B]);
-    vt = ReverseDiffExpressions.VariableTracker();
-    ∂ls = ReverseDiffExpressions.LoopSetDerivatives.∂LoopSet(lsAmulB, vt);
-    ∂ls.fls
-    ∂ls.rls
+    ∂lsAmulB = ReverseDiffExpressions.LoopSetDerivatives.∂LoopSet(lsAmulB, tracked_vars);
+    ∂lsAmulB.fls
+    ∂lsAmulB.rls
     # Write your own tests here.
 end
